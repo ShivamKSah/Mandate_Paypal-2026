@@ -27,6 +27,16 @@ def main():
         checks.append(("Application access key", len(config.APP_ACCESS_KEY) >= 32))
     for name, ready in checks:
         print(f"{'OK' if ready else 'MISSING'}: {name}")
+    diag = config.ENV_DIAGNOSTICS
+    print(f"ENV: loaded={diag['loaded_env_path']}")
+    print(
+        f"PAYPAL_MERCHANT_ID: length={diag['merchant_length']} "
+        f"masked={diag['masked_merchant_id']}"
+    )
+    if diag.get("stale_os_conflict"):
+        print(f"WARNING: {diag['stale_os_conflict']}")
+    if diag.get("inner_outer_conflict"):
+        print(f"WARNING: {diag['inner_outer_conflict']}")
     print("This is a configuration check. It does not verify live provider calls or webhook delivery.")
     return 0 if all(ready for _, ready in checks) else 1
 
