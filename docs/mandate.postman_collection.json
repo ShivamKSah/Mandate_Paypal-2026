@@ -1,0 +1,837 @@
+{
+  "info": {
+    "name": "Mandate Sandbox API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    }
+  ],
+  "item": [
+    {
+      "name": "Run",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/agent-runs",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "agent-runs"
+          ]
+        }
+      }
+    },
+    {
+      "name": "List Attacks",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/attacks",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "attacks"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Run Attack",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/attacks/run",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "attacks",
+            "run"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Run All Attacks",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/attacks/run-all",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "attacks",
+            "run-all"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Listing",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/cases",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "cases"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/cases",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "cases"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Suggest Cause",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/cases/suggest-cause",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "suggest-cause"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Accept",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/cases/{case_id}/accept",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{case_id}",
+            "accept"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Reject",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/cases/{case_id}/reject",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{case_id}",
+            "reject"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Catalog",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/catalog",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "catalog"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Challenge Stats",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/challenge/stats",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "challenge",
+            "stats"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Eval Results",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/evals",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "evals"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/health",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Ledger",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/ledger",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "ledger"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Ledger Verify",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/ledger/verify",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "ledger",
+            "verify"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/logout",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "logout"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Listing",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/mandates",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "mandates"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/mandates",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "mandates"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/mandates/{mandate_id}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "mandates",
+            "{mandate_id}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Grant Complete",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/mandates/{mandate_id}/grant/complete",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "mandates",
+            "{mandate_id}",
+            "grant",
+            "complete"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Grant Init",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/mandates/{mandate_id}/grant/init",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "mandates",
+            "{mandate_id}",
+            "grant",
+            "init"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Revoke",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/mandates/{mandate_id}/revoke",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "mandates",
+            "{mandate_id}",
+            "revoke"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Listing",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/payments",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "payments"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Cancel",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/payments/{payment_id}/cancel",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "payments",
+            "{payment_id}",
+            "cancel"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Capture",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/payments/{payment_id}/capture",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "payments",
+            "{payment_id}",
+            "capture"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Checkout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/payments/{payment_id}/checkout",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "payments",
+            "{payment_id}",
+            "checkout"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Vault Charge",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/payments/{payment_id}/vault-charge",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "payments",
+            "{payment_id}",
+            "vault-charge"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Listing",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/proposals",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "proposals"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/proposals",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "proposals"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/proposals/{proposal_id}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "proposals",
+            "{proposal_id}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Approve",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/proposals/{proposal_id}/approve",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "proposals",
+            "{proposal_id}",
+            "approve"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Ready",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/ready",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "ready"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Session",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/session",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "session"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Reset Demo Session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/session/reset",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "session",
+            "reset"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Paypal",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/webhooks/paypal",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "webhooks",
+            "paypal"
+          ]
+        }
+      }
+    }
+  ]
+}

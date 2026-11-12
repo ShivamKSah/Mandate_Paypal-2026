@@ -82,6 +82,7 @@ flowchart LR
 - **AI (Advisory / Proposal Only)**: GroqCloud (`openai/gpt-oss-20b` with labeled deterministic rules fallback)
 - **Frontend**: React 19, TypeScript 7, Vite 8, Zod, Lucide Icons
 - **Testing & Verification**: `pytest`, `pytest-socket` (loopback-only offline guard), `httpx.MockTransport`, Hypothesis (`@seed(42)`), Node test runner
+- **API & Integration Artifacts**: [docs/mandate.postman_collection.json](docs/mandate.postman_collection.json) (36 endpoints generated from FastAPI OpenAPI) and [examples/guarded_agent.py](examples/guarded_agent.py) (minimal external agent proposal example)
 
 ## Run Locally
 
