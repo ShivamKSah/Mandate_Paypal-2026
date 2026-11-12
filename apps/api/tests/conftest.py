@@ -81,6 +81,7 @@ def client(database, monkeypatch):
     app.state.testing = True
     monkeypatch.setattr("mandate.http_boundary.SessionLocal", database)
     monkeypatch.setattr("mandate.agents.router.SessionLocal", database)
+    monkeypatch.setattr("mandate.recovery.SessionLocal", database)
     monkeypatch.setattr("mandate.reconciliation.SessionLocal", database)
     with TestClient(app) as client:
         session = client.get("/api/session").json()

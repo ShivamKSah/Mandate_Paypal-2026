@@ -1,19 +1,46 @@
 import json
 from datetime import timedelta
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session as DBSession
 
-from .audit import digest
+from .audit import append, digest
 from .db import get_db
-from .models import Payment, WebhookEvent, now
+from .models import Case, Operation, Payment, WebhookEvent, now
 from .payments.paypal import PayPalClient, PayPalError
 from .rate_limits import consume
-from .settlement import capture_from_order, settle_capture
+from .settlement import capture_from_order, lock_payment, settle_capture, settle_refund
 
 router = APIRouter(prefix='/api/webhooks')
+
+
+def _parse_usd_cents(amount):
+    if not isinstance(amount, dict) or amount.get('currency_code') != 'USD':
+        return None
+    value = amount.get('value')
+    if not isinstance(value, str) or not re.fullmatch(r'\d+\.\d{2}', value):
+        return None
+    dollars, cents = value.split('.')
+    total = int(dollars) * 100 + int(cents)
+    return total if total > 0 else None
+
+
+def _extract_capture_id(resource, refund_res):
+    for obj in (refund_res, resource):
+        if not isinstance(obj, dict):
+            continue
+        related = obj.get('supplementary_data', {}).get('related_ids', {})
+        if isinstance(related, dict) and isinstance(related.get('capture_id'), str) and related['capture_id']:
+            return related['capture_id']
+        for link in obj.get('links', []):
+            if isinstance(link, dict) and link.get('rel') == 'up' and isinstance(link.get('href'), str):
+                match = re.search(r'/captures/([A-Za-z0-9-]+)', link['href'])
+                if match:
+                    return match.group(1)
+    return None
 
 
 async def process_event(client, db, event_id):
@@ -47,6 +74,72 @@ async def process_event(client, db, event_id):
                 matches = capture and resource.get('status') == 'COMPLETED' and all(resource.get(key) == capture.get(key) for key in ('id', 'amount'))
                 if matches and settle_capture(db, payment_id, result):
                     status = 'PROCESSED'
+    elif event['event_type'] == 'PAYMENT.CAPTURE.REFUNDED':
+        status = 'RETRY_REQUIRED'
+        refund_id = resource.get('id')
+        if isinstance(refund_id, str) and refund_id:
+            try:
+                refund_res = await client.get_refund(refund_id)
+            except PayPalError:
+                refund_res = None
+            refund_cents = _parse_usd_cents(refund_res.get('amount')) if refund_res else None
+            matches = (
+                refund_res
+                and refund_res.get('id') == refund_id
+                and refund_res.get('status') == 'COMPLETED'
+                and resource.get('status') == 'COMPLETED'
+                and refund_cents is not None
+                and refund_res.get('amount') == resource.get('amount')
+            )
+            if matches:
+                capture_id = _extract_capture_id(resource, refund_res)
+                target_payment = db.scalar(select(Payment).where(Payment.provider_capture_id == capture_id)) if capture_id else None
+                if target_payment is None:
+                    op_match = next(
+                        (op for op in db.scalars(select(Operation).where(Operation.kind == 'REFUND'))
+                         if (op.result or {}).get('id') == refund_id),
+                        None,
+                    )
+                    if op_match:
+                        target_payment = db.get(Payment, op_match.payment_id)
+                if target_payment is not None:
+                    owner, locked_payment = lock_payment(db, target_payment.id)
+                    refund_ops = list(db.scalars(select(Operation).where(
+                        Operation.payment_id == locked_payment.id, Operation.kind == 'REFUND',
+                    ).with_for_update()))
+                    if any(op.status == 'COMPLETED' and (op.result or {}).get('id') == refund_id for op in refund_ops):
+                        status = 'PROCESSED'
+                    else:
+                        pending_case = db.scalar(select(Case).where(
+                            Case.payment_id == locked_payment.id,
+                            Case.status.in_(['REFUND_PENDING', 'UNKNOWN']),
+                            Case.offer_cents == refund_cents,
+                        ).with_for_update())
+                        pending_op = next(
+                            (op for op in refund_ops if pending_case and op.entity_key == pending_case.id),
+                            None,
+                        )
+                        if pending_op and settle_refund(db, pending_op.id, refund_res):
+                            status = 'PROCESSED'
+                        elif (locked_payment.status == 'CAPTURED'
+                              and locked_payment.refunded_cents + locked_payment.refund_reserved_cents + refund_cents <= locked_payment.amount_cents):
+                            db.add(Operation(
+                                payment_id=locked_payment.id,
+                                kind='REFUND',
+                                entity_key=f'webhook:{refund_id}',
+                                payload_hash=digest({'refund_id': refund_id, 'amount_cents': refund_cents}),
+                                status='COMPLETED',
+                                result={'id': refund_id, 'status': 'COMPLETED'},
+                            ))
+                            locked_payment.refunded_cents += refund_cents
+                            append(db, owner, 'PAYMENT_REFUNDED', locked_payment.id, {
+                                'payment_id': locked_payment.id,
+                                'amount_cents': refund_cents,
+                                'provider_refund_id': refund_id,
+                                'source': 'webhook',
+                            })
+                            status = 'PROCESSED'
+                    db.commit()
     stored = db.scalar(select(WebhookEvent).where(WebhookEvent.provider_event_id == event_id).with_for_update().execution_options(populate_existing=True))
     if stored.status not in {'PROCESSED', 'IGNORED'}:
         stored.status = status

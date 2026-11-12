@@ -61,3 +61,8 @@ class GrantCompleteInput(Input):
 
 class AttackRunInput(Input):
     attack_id: str = Field(min_length=1, max_length=60)
+
+
+class SuggestCauseInput(Input):
+    payment_id: str = Field(min_length=1, max_length=80)
+    evidence: str = Field(min_length=1, max_length=8000)

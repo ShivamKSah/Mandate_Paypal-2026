@@ -319,6 +319,17 @@ export const api = {
     ),
   rejectCase: (id: string) =>
     request(`/cases/${id}/reject`, CaseSchema, post({})),
+  suggestCause: (payment_id: string, evidence: string) =>
+    request(
+      "/cases/suggest-cause",
+      z.object({
+        suggested_cause: CauseSchema,
+        explanation: z.string(),
+        policy_band_pct: z.tuple([z.number().int(), z.number().int()]),
+        llm_fallback: z.boolean(),
+      }),
+      post({ payment_id, evidence }),
+    ),
   ledger: () =>
     request("/ledger", list(LedgerSchema)).then((entries) => entries.reverse()),
   verifyLedger: () => request("/ledger/verify", VerifySchema),
