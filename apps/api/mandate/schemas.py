@@ -56,3 +56,7 @@ class EmptyInput(Input):
 
 class GrantCompleteInput(Input):
     order_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class AttackRunInput(Input):
+    attack_id: str = Field(min_length=1, max_length=60)

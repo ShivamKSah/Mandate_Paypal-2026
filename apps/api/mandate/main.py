@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session as DBSession
 from . import models
 from .catalog import CATALOG
 from . import config
+from .attacks import router as attacks_router
 from .db import engine, get_db
 from .proposals import router as proposals_router
 from .resources import router as resources_router
@@ -54,6 +55,7 @@ app.include_router(agents_router)
 app.include_router(payments_router)
 app.include_router(recovery_router)
 app.include_router(webhooks_router)
+app.include_router(attacks_router)
 
 
 @app.exception_handler(SQLAlchemyError)

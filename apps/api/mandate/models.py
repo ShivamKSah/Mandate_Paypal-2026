@@ -158,3 +158,16 @@ class RateLimitBucket(Base):
     key: Mapped[str] = mapped_column(String(160), primary_key=True)
     count: Mapped[int] = mapped_column(Integer, default=0)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class ChallengeAttempt(Base):
+    __tablename__ = "challenge_attempts"
+    id: Mapped[str] = mapped_column(String(80), primary_key=True, default=uid)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"), index=True)
+    attack_id: Mapped[str] = mapped_column(String(60))
+    verdict: Mapped[str] = mapped_column(String(30))
+    expected_rule: Mapped[str] = mapped_column(String(40))
+    actual_rule: Mapped[str] = mapped_column(String(40))
+    rules: Mapped[list] = mapped_column(JSON)
+    breached: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
