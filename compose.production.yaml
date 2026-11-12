@@ -1,0 +1,55 @@
+name: mandate-production
+
+x-app: &app
+  image: mandate:local
+  build: .
+  env_file: ${MANDATE_ENV_FILE:-.env.production}
+  environment:
+    APP_ENV: production
+    DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL using the db hostname and port 5432}
+    PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set an HTTPS PUBLIC_BASE_URL}
+    COOKIE_SECURE: 'true'
+    APP_ACCESS_KEY: ${APP_ACCESS_KEY:?Set a random access key of at least 32 characters}
+    PAYPAL_ENV: sandbox
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
+services:
+  db:
+    image: postgres:17-bookworm@sha256:839fbb5a4942a7758dd93e18b42ea5649807491a0545b5eeeb8f0b8bb11857a5
+    environment:
+      POSTGRES_USER: mandate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: mandate
+    volumes:
+      - mandate-production-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U mandate -d mandate']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  migrate:
+    <<: *app
+    command: [python, -m, mandate.migrate]
+    healthcheck:
+      disable: true
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: 'no'
+  app:
+    <<: *app
+    ports:
+      - '127.0.0.1:8000:8000'
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  mandate-production-postgres:

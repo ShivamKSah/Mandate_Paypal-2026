@@ -1,0 +1,1 @@
+"""Restricted shopping-model integration."""
