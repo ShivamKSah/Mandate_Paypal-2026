@@ -25,6 +25,7 @@ export const SessionSchema = z.object({
   paypal_configured: z.boolean(),
   authenticated: z.boolean(),
   access_required: z.boolean(),
+  public_demo: z.boolean().default(false),
 });
 export const ProductSchema = z.object({
   id: z.string(),
@@ -272,6 +273,7 @@ export const api = {
   login: (access_key: string) =>
     request("/login", SessionSchema, post({ access_key })),
   logout: () => request("/logout", z.undefined(), post({})),
+  resetSession: () => request("/session/reset", SessionSchema, post({})),
   catalog: () => request("/catalog", list(ProductSchema)),
   mandates: () => request("/mandates", list(MandateSchema)),
   createMandate: (body: CreateMandate) =>

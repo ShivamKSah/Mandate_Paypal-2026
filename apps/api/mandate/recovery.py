@@ -8,6 +8,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DBSession
 
+from . import config
 from .audit import append, digest
 from .db import SessionLocal, get_db
 from .models import Case, Mandate, Operation, Payment, Proposal, ReconciliationLease, now
@@ -99,6 +100,7 @@ async def suggest_cause(body: SuggestCauseInput, request: Request):
     with SessionLocal() as db, db.begin():
         owner = human(request, db)
         consume(db, "model-session", owner.id, 6)
+        consume(db, "llm-daily", "all", config.DAILY_LLM_RUN_LIMIT, seconds=86400)
         payment = owned(db, Payment, body.payment_id, owner)
         if payment.status != "CAPTURED":
             raise HTTPException(409, "Recovery requires a confirmed captured payment")

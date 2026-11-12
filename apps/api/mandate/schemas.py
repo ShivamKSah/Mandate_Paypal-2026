@@ -66,3 +66,7 @@ class AttackRunInput(Input):
 class SuggestCauseInput(Input):
     payment_id: str = Field(min_length=1, max_length=80)
     evidence: str = Field(min_length=1, max_length=8000)
+
+
+class LoginInput(Input):
+    access_key: str = Field(min_length=1, max_length=1024)

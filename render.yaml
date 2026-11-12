@@ -1,0 +1,48 @@
+services:
+  - type: web
+    name: mandate
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: sh -c "python -m mandate.migrate && exec python -m uvicorn mandate.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: APP_ENV
+        value: production
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: PUBLIC_DEMO
+        value: "true"
+      - key: DAILY_LLM_RUN_LIMIT
+        value: "50"
+      - key: PAYPAL_ENV
+        value: sandbox
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_MERCHANT_ID
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: VAULT_ENCRYPTION_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-20b
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mandate-db
+          property: connectionString
+
+databases:
+  - name: mandate-db
+    # TODO: Upgrade to a paid PostgreSQL plan before judging!
+    # Render's free PostgreSQL tier expires automatically after 30 days, and judging runs until Dec 15.
+    plan: free

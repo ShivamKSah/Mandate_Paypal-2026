@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import Field
 from sqlalchemy import select
 
+from .. import config
 from ..audit import append
 from ..catalog import CATALOG
 from ..constraints import constraints_to_dict, extract_constraints_async
@@ -43,6 +44,7 @@ async def run(body: AgentInput, request: Request):
                 raise HTTPException(exc.status_code, str(exc)) from exc
         consume(db, "model-global", "all", 10)
         consume(db, "model-session", owner.id, 3)
+        consume(db, "llm-daily", "all", config.DAILY_LLM_RUN_LIMIT, seconds=86400)
         constraints, grant_instruction = dict(grant.constraints), grant.instruction
         owner_id, auth_version = owner.id, owner.csrf_token
         append(db, owner, "AGENT_RUN_STARTED", run_id, {"mandate_id": grant.id})

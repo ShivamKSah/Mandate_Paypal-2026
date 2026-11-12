@@ -187,9 +187,11 @@ export default function App() {
           <div className="top-actions">
             <span className="mode-chip">
               <span />
-              {session.access_required
-                ? "Protected workspace"
-                : "Local workspace"}
+              {session.public_demo
+                ? "Public demo (isolated)"
+                : session.access_required
+                  ? "Protected workspace"
+                  : "Local workspace"}
             </span>
             <button
               className="icon-button"
@@ -199,6 +201,21 @@ export default function App() {
             >
               <RotateCcw size={16} />
             </button>
+            {session.public_demo && (
+              <button
+                className="button-quiet"
+                disabled={working}
+                onClick={() =>
+                  void action(async () => {
+                    const next = await api.resetSession();
+                    setSelectedGrantId("");
+                    return next;
+                  }, "Demo workspace reset with a fresh $500 spending grant.")
+                }
+              >
+                Reset
+              </button>
+            )}
             {session.access_required && (
               <button
                 className="button-quiet"

@@ -1,6 +1,6 @@
 # PayPal sandbox setup and submission checks
 
-Updated November 9, 2026 for GroqCloud. This application uses PayPal sandbox only. The implemented checkout asks the buyer to approve each order. Saved-payment vaulting is a separate, unfinished feature.
+Updated November 12, 2026. This application uses PayPal sandbox only. It supports two payment modes per spending grant: **Autonomous (vaulted)** (via PayPal Vault setup + `payment_source.paypal.vault_id`) and **Buyer approves each purchase** (standard PayPal order checkout fallback).
 
 ## 1. Create the test accounts
 
@@ -14,7 +14,7 @@ In Apps & Credentials, select Sandbox and create a REST app named Mandate. Choos
 
 Obtain the merchant ID for that same sandbox business. If its account details do not show it, sign in to [sandbox PayPal](https://www.sandbox.paypal.com/) with the business test login and open Account Settings > Business information > PayPal Merchant ID. Copy the merchant ID, not the email, app ID, or client ID. [PayPal merchant ID instructions](https://www.paypal.com/us/cshelp/article/how-do-i-find-my-secure-merchant-id-on-my-paypal-account-help538)
 
-Vault does not need to be enabled for the current buyer-approved checkout. Enabling a dashboard setting alone does not implement unattended purchases.
+Enable **Vault** (Reference Transactions / PayPal Vault) on your Sandbox REST app under **Apps & Credentials -> Mandate -> Features -> Vault** if you want to run **Autonomous (vaulted)** grants (`store_in_vault: ON_SUCCESS` and server-side `vault_id` charges). Without Vault enabled, buyer-approved per-purchase checkout remains available as the fallback.
 
 ## 3. Update the existing root .env
 
@@ -39,6 +39,13 @@ PAYPAL_CLIENT_SECRET=<sandbox-app-secret>
 PAYPAL_MERCHANT_ID=<sandbox-business-merchant-id>
 PAYPAL_WEBHOOK_ID=<webhook-subscription-id-from-step-4>
 
+# Required for autonomous vaulted grants (Fernet base64 32-byte key).
+VAULT_ENCRYPTION_KEY=<fernet-key>
+
+# Optional public demo mode (false = operator APP_ACCESS_KEY login required in production).
+PUBLIC_DEMO=false
+DAILY_LLM_RUN_LIMIT=50
+
 # Required for the shopping agent. The model override is optional.
 GROQ_API_KEY=<your-groqcloud-api-key>
 GROQ_MODEL=openai/gpt-oss-20b
@@ -52,14 +59,20 @@ Angle-bracket values are placeholders. Do not paste this block over your existin
 | PAYPAL_CLIENT_SECRET | Same app, reveal its secret | Server authentication |
 | PAYPAL_MERCHANT_ID | Associated sandbox business account | Bind orders/captures to the trusted seller |
 | PAYPAL_WEBHOOK_ID | Webhook registration in that app | Verify incoming event signatures |
+| VAULT_ENCRYPTION_KEY | Generated Fernet key (`Fernet.generate_key()`) | Encrypt/decrypt stored PayPal vault tokens at rest |
 | GROQ_API_KEY | Your GroqCloud project | Run the shopping model |
 | GROQ_MODEL | Optional GroqCloud model ID | Select a catalog cart through the restricted tool |
-| APP_ACCESS_KEY | A random secret you generate | Sign in to the protected operator workspace |
+| APP_ACCESS_KEY | A random secret you generate | Sign in to the protected operator workspace (when `PUBLIC_DEMO=false`) |
+| PUBLIC_DEMO | `true` or `false` (default `false`) | Allow isolated anonymous visitor sessions with a Reset button and daily LLM cap |
+| DAILY_LLM_RUN_LIMIT | Positive integer (default `50`) | Global daily cap on GroqCloud agent/suggestion requests |
 | PUBLIC_BASE_URL | The exact browser-facing origin | PayPal return/cancel redirects and Origin checks |
 
 The default, `openai/gpt-oss-20b`, supports function calling on GroqCloud and is listed on its Free plan. Check your project's quota in the GroqCloud console. [GroqCloud model documentation](https://console.groq.com/docs/model/openai/gpt-oss-20b), [GroqCloud rate limits](https://console.groq.com/docs/rate-limits)
 
-The access key is this application's login, not your PayPal password. There is one protected operator workspace. Logging in rotates the prior cookie and restores that workspace's history; anonymous development sessions remain isolated.
+### Access-Key Mode vs. Public Demo Mode (`PUBLIC_DEMO=true`)
+
+- **Operator Access-Key Mode (`PUBLIC_DEMO=false`, default)**: Production requires `APP_ACCESS_KEY` (>= 32 characters). There is one durable operator workspace; logging in rotates the prior cookie and restores that workspace's history. Best for private judging or personal testing.
+- **Public Demo Mode (`PUBLIC_DEMO=true`)**: Production still enforces `APP_ENV=production`, HTTPS `PUBLIC_BASE_URL`, `COOKIE_SECURE=true`, and sandbox-only PayPal guards, but skips the `APP_ACCESS_KEY` login screen so judges/visitors each receive an isolated anonymous `Session` seeded with a `$500` grant, a topbar **Reset** button (`POST /api/session/reset`), per-session rate limits, and a global `DAILY_LLM_RUN_LIMIT` cap. **Tradeoff**: public endpoints can be exercised by any visitor within the rate/LLM caps (with no real money moved because PayPal is sandbox-only), so keep `PUBLIC_DEMO=false` outside public demo hosting.
 
 ## 4. Register an HTTPS webhook
 
@@ -88,9 +101,9 @@ In your sandbox REST app, add a webhook URL:
 https://<your-public-host>/api/webhooks/paypal
 ```
 
-Subscribe to `PAYMENT.CAPTURE.COMPLETED`. Save the registration and put its Webhook ID in `PAYPAL_WEBHOOK_ID`. This is the subscription's ID, not an individual event ID, order ID, or capture ID. Restart the API once more. [PayPal webhook registration and verification](https://developer.paypal.com/api/rest/webhooks/rest/)
+Subscribe to both `PAYMENT.CAPTURE.COMPLETED` and `PAYMENT.CAPTURE.REFUNDED`. Save the registration and put its Webhook ID in `PAYPAL_WEBHOOK_ID`. This is the subscription's ID, not an individual event ID, order ID, or capture ID. Restart the API once more. [PayPal webhook registration and verification](https://developer.paypal.com/api/rest/webhooks/rest/)
 
-The code settles capture-completed events and reconciles its own requested refunds. It does not yet account automatically for every refund/reversal initiated directly in PayPal. For this demo, issue refunds through Mandate. Do not advertise external refund/reversal automation.
+The webhook processor verifies signatures via PayPal's postback API, verifies every capture/refund against an authoritative `GET` (`get_order` / `get_refund`), deduplicates by `provider_event_id`, and settles both capture completions and capture refunds onto the hash-chained audit ledger.
 
 The current callback URLs are generated automatically:
 
