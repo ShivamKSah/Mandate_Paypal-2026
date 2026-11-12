@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session as DBSession
 
 from .audit import append, digest
 from .catalog import quote
+from .constraints import constraints_to_dict, extract_constraints
 from .db import get_db
 from .models import Mandate, Operation, Payment, Proposal, now
 from .policy import evaluate
@@ -37,7 +38,7 @@ def reserve(db, owner, grant, proposal):
     append(db, owner, "PAYMENT_RESERVED", payment.id, {"proposal_id": proposal.id, "amount_cents": payment.amount_cents})
 
 
-def submit(db, owner, body: ProposalInput):
+def submit(db, owner, body: ProposalInput, *, extracted_constraints=None, extraction_failed: bool = False):
     grant = owned(db, Mandate, body.mandate_id, owner, lock=True)
     payload_hash = digest(body.model_dump())
     existing = db.scalar(select(Proposal).where(Proposal.mandate_id == grant.id, Proposal.purchase_intent_id == body.purchase_intent_id))
@@ -45,8 +46,15 @@ def submit(db, owner, body: ProposalInput):
         if existing.payload_hash != payload_hash:
             raise HTTPException(409, "Purchase intent already exists with a different payload")
         return existing
+    if extracted_constraints is None and not extraction_failed and body.instruction:
+        extracted_constraints, extraction_failed = constraints_to_dict(extract_constraints(body.instruction))
     cart, missing = quote(body.items, body.currency)
-    decision, rules = evaluate(db, grant, cart, missing, claimed_total=body.claimed_total_cents)
+    decision, rules = evaluate(
+        db, grant, cart, missing,
+        claimed_total=body.claimed_total_cents,
+        extracted_constraints=extracted_constraints,
+        extraction_failed=extraction_failed,
+    )
     proposal = Proposal(session_id=owner.id, mandate_id=grant.id, purchase_intent_id=body.purchase_intent_id,
                         payload_hash=payload_hash, cart=cart, cart_hash=digest(cart), grant_version=grant.version,
                         decision=decision, status={"APPROVE": "APPROVED", "ESCALATE": "ESCALATED", "DENY": "DENIED"}[decision],

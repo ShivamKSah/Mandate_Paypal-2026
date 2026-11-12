@@ -12,6 +12,7 @@ CATALOG = {
         product("gift-card", "Gift card", 80000, "gift_cards", merchant="untrusted-merchant"),
         product("subscription", "Monthly office subscription", 2500, "subscription", recurring=True),
         product("keyboard", "Mechanical keyboard", 8900, "electronics"),
+        product("mouse-ergonomic", "Ergonomic vertical mouse", 4500, "electronics", attributes={"ergonomic": True}),
     ]
 }
 

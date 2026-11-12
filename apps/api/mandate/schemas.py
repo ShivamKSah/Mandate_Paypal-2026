@@ -32,6 +32,7 @@ class ProposalInput(Input):
     items: list[ItemInput] = Field(min_length=1, max_length=30)
     currency: str = Field(default="USD", min_length=3, max_length=3)
     claimed_total_cents: Cents | None = None
+    instruction: str | None = Field(default=None, max_length=4000)
 
 
 class ApprovalInput(Input):

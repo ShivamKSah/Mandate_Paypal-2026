@@ -8,7 +8,7 @@ from .models import Payment, Proposal, now
 NAMES = ["Active authority", "Budget", "Transaction cap", "Trusted merchant", "Category", "Exact quote", "Velocity", "Purchase identity", "Confirmed constraints", "Non-recurring", "Additional review"]
 
 
-def evaluate(db, grant, cart, missing, *, claimed_total=None, proposal_id=None, human_approved=False, reserved_credit=0, payment_id=None):
+def evaluate(db, grant, cart, missing, *, claimed_total=None, proposal_id=None, human_approved=False, reserved_credit=0, payment_id=None, extracted_constraints=None, extraction_failed=False):
     rules = []
 
     def rule(number, status, message):
@@ -30,15 +30,30 @@ def evaluate(db, grant, cart, missing, *, claimed_total=None, proposal_id=None, 
     used = db.scalar(slots)
     rule(7, "PASS" if used < grant.velocity_limit else "DENY", f"{used} of {grant.velocity_limit} hourly purchase slots reserved or used")
     rule(8, "PASS", "Purchase intent is deduplicated under the grant lock")
-    missing_attributes, mismatches = [], []
+    missing_attributes, mismatches, extracted_escalations = [], [], []
     for item in items:
         for key, value in grant.constraints.items():
             if key not in item["attributes"]:
                 missing_attributes.append(f"{item['product_id']}.{key}")
             elif item["attributes"][key] != value:
                 mismatches.append(f"{item['product_id']}.{key}")
-    constraint_status = "DENY" if mismatches else "ESCALATE" if missing_attributes and not human_approved else "PASS"
-    rule(9, constraint_status, "Mismatched: " + ", ".join(mismatches) if mismatches else "Missing: " + ", ".join(missing_attributes) if missing_attributes else "Confirmed constraints match")
+        for key, value in (extracted_constraints or {}).items():
+            if key in grant.constraints:
+                continue
+            # Extracted constraints and extraction failures may only push toward ESCALATE, never DENY.
+            if value == "unspecified" or key not in item["attributes"] or item["attributes"][key] != value:
+                extracted_escalations.append(f"{item['product_id']}.{key}")
+    if extraction_failed and not human_approved:
+        extracted_escalations.append("constraint_extraction")
+    escalate_p09 = bool(missing_attributes or extracted_escalations) and not human_approved
+    constraint_status = "DENY" if mismatches else "ESCALATE" if escalate_p09 else "PASS"
+    p09_msg = (
+        "Mismatched: " + ", ".join(mismatches) if mismatches
+        else "Missing: " + ", ".join(missing_attributes) if missing_attributes
+        else "Needs review from extracted instruction constraints: " + ", ".join(extracted_escalations) if extracted_escalations
+        else "Confirmed constraints match"
+    )
+    rule(9, constraint_status, p09_msg)
     rule(10, "DENY" if any(i["recurring"] for i in items) else "PASS", "Recurring purchases are forbidden")
     duplicate_query = select(Proposal.id).where(Proposal.mandate_id == grant.id, Proposal.cart_hash == digest(cart), Proposal.created_at > now() - timedelta(hours=1))
     if proposal_id:

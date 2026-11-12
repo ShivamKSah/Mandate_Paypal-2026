@@ -322,13 +322,19 @@ export const api = {
   ledger: () =>
     request("/ledger", list(LedgerSchema)).then((entries) => entries.reverse()),
   verifyLedger: () => request("/ledger/verify", VerifySchema),
-  agentRun: (mandate_id: string, instruction: string) =>
+  agentRun: (mandate_id: string, instruction: string, allow_fallback = false) =>
     request(
       "/agent-runs",
-      z.object({ summary: z.string(), proposal: ProposalSchema }),
+      z.object({
+        summary: z.string(),
+        llm_fallback: z.boolean().default(false),
+        planner_label: z.string().optional(),
+        proposal: ProposalSchema,
+      }),
       post({
         mandate_id,
         instruction: z.string().trim().min(1).max(4000).parse(instruction),
+        allow_fallback,
       }),
     ),
 };
