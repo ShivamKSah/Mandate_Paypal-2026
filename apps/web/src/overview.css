@@ -731,7 +731,9 @@
     scroll-behavior: auto;
   }
   .panel,
-  .grant-card-face {
+  .grant-card-face,
+  .theme-toggle-icon,
+  .live-dot {
     animation: none;
   }
   ::view-transition-old(workspace-view),
