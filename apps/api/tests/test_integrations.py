@@ -53,6 +53,62 @@ def test_channel3_search_fallback():
     assert results[0]["id"].startswith("c3-")
 
 
+@patch("mandate.channel3.httpx.Client")
+def test_channel3_search_live_api_mocked(mock_client_class, monkeypatch):
+    """Test Channel3 live API search with mocked real POST /v1/search endpoint and schema."""
+    monkeypatch.setenv("CHANNEL3_API_KEY", "test-c3-key-12345")
+    monkeypatch.setenv("CHANNEL3_TEST_MOCK", "1")
+
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "products": [
+            {
+                "id": "prod-desk-99",
+                "title": "Ergonomic Standing Desk",
+                "category": "furniture",
+                "brand": "Jarvis",
+                "offers": [
+                    {
+                        "price": 450.50,
+                        "currency": "USD",
+                        "merchant": "demo-merchant",
+                        "url": "https://example.com/desk",
+                    }
+                ],
+                "attributes": {"width_cm": 160, "electric": True},
+                "description": "Adjustable height ergonomic desk",
+            }
+        ]
+    }
+    mock_client.post.return_value = mock_response
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    results = search_channel3("standing desk", limit=1)
+
+    assert len(results) == 1
+    item = results[0]
+    assert item["id"] == "c3-prod-desk-99"
+    assert item["name"] == "Ergonomic Standing Desk"
+    assert item["unit_price_cents"] == 45050
+    assert item["currency"] == "USD"
+    assert item["merchant_id"] == "demo-merchant"
+    assert item["category"] == "furniture"
+    assert item["attributes"] == {"width_cm": 160, "electric": True}
+    assert item["recurring"] is False
+    assert item["source"] == "channel3-live"
+
+    # Verify real request endpoint, headers, and body per docs.trychannel3.com
+    mock_client.post.assert_called_once()
+    call_args, call_kwargs = mock_client.post.call_args
+    assert call_args[0] == "https://api.trychannel3.com/v1/search"
+    assert call_kwargs["headers"]["x-api-key"] == "test-c3-key-12345"
+    assert call_kwargs["headers"]["Content-Type"] == "application/json"
+    assert call_kwargs["headers"]["Accept"] == "application/json"
+    assert call_kwargs["json"] == {"query": "standing desk", "limit": 1}
+
+
 def test_channel3_lookup_and_quote_integration():
     item = lookup_channel3_item("c3-dock-tb4")
     assert item is not None

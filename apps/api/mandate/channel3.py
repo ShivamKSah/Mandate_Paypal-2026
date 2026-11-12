@@ -7,7 +7,7 @@ import httpx
 
 logger = logging.getLogger("mandate.channel3")
 
-CHANNEL3_BASE_URL = "https://api.channel3.tv/v1"
+CHANNEL3_BASE_URL = "https://api.trychannel3.com"
 
 # Curated fallback product items normalized to Channel3 schema
 CHANNEL3_FALLBACK_CATALOG: list[dict[str, Any]] = [
@@ -84,41 +84,99 @@ def is_channel3_configured() -> bool:
     return bool(get_channel3_api_key())
 
 
-def search_channel3(query: str, limit: int = 5) -> list[dict[str, Any]]:
-    """Search for products using Channel3 API, falling back to curated Channel3 catalog."""
+def search_channel3(
+    query: str,
+    limit: int = 5,
+    client: httpx.Client | None = None,
+) -> list[dict[str, Any]]:
+    """Search for products using Channel3 API, falling back to curated Channel3 catalog.
+
+    Per docs.trychannel3.com (api-reference/v1/search):
+      - Base URL: https://api.trychannel3.com
+      - Endpoint: POST /v1/search
+      - Header: x-api-key: <key>
+      - Body: {"query": query, "limit": limit}
+      - Response: {"products": [{"title": "...", "offers": [{"price": ...}]}]}
+    """
     api_key = get_channel3_api_key()
     tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
 
-    # If live key is provided, attempt live Channel3 API query
-    if api_key and not os.getenv("PYTEST_CURRENT_TEST"):
+    # If live key is provided and not in unmocked pytest test runner, attempt Channel3 POST /v1/search
+    allow_network = client is not None or not os.getenv("PYTEST_CURRENT_TEST") or os.getenv("CHANNEL3_TEST_MOCK")
+    if api_key and allow_network:
         try:
-            with httpx.Client(timeout=4.0) as client:
-                res = client.get(
-                    f"{CHANNEL3_BASE_URL}/products/search",
-                    params={"q": query, "limit": limit},
-                    headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+            headers = {
+                "x-api-key": api_key,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+            body = {
+                "query": query,
+                "limit": limit,
+            }
+            if client is not None:
+                res = client.post(
+                    f"{CHANNEL3_BASE_URL}/v1/search",
+                    json=body,
+                    headers=headers,
                 )
-                if res.status_code == 200:
-                    data = res.json()
-                    raw_items = data.get("products") or data.get("items") or []
-                    normalized = []
-                    for item in raw_items[:limit]:
-                        pid = str(item.get("id") or item.get("sku") or hash(item.get("title", "")))
-                        price = int(item.get("price_cents") or (float(item.get("price", 0)) * 100))
-                        normalized.append({
-                            "id": f"c3-{pid}",
-                            "name": item.get("title") or item.get("name") or "Channel3 Product",
-                            "merchant_id": item.get("retailer") or "channel3-merchant",
-                            "category": item.get("category", "general"),
-                            "unit_price_cents": price,
-                            "currency": item.get("currency", "USD"),
-                            "attributes": item.get("attributes") or {},
-                            "recurring": False,
-                            "description": item.get("description", "Product retrieved via Channel3 API"),
-                            "source": "channel3-live",
-                        })
-                    if normalized:
-                        return normalized
+            else:
+                with httpx.Client(timeout=4.0) as http_client:
+                    res = http_client.post(
+                        f"{CHANNEL3_BASE_URL}/v1/search",
+                        json=body,
+                        headers=headers,
+                    )
+
+            if res.status_code == 200:
+                data = res.json()
+                raw_products = data.get("products") or []
+                normalized = []
+                for item in raw_products[:limit]:
+                    title = item.get("title") or item.get("name") or "Channel3 Product"
+                    pid = str(item.get("id") or item.get("sku") or abs(hash(title)))
+
+                    offers = item.get("offers") or []
+                    first_offer = (
+                        offers[0]
+                        if isinstance(offers, list) and len(offers) > 0 and isinstance(offers[0], dict)
+                        else {}
+                    )
+
+                    price_val = first_offer.get("price")
+                    if price_val is not None:
+                        try:
+                            price_cents = int(round(float(price_val) * 100))
+                        except (ValueError, TypeError):
+                            price_cents = int(first_offer.get("price_cents") or 0)
+                    else:
+                        price_cents = int(first_offer.get("price_cents") or item.get("price_cents") or 0)
+
+                    merchant = (
+                        first_offer.get("merchant")
+                        or first_offer.get("merchant_name")
+                        or first_offer.get("retailer")
+                        or item.get("brand")
+                        or "channel3-merchant"
+                    )
+                    currency = first_offer.get("currency") or item.get("currency") or "USD"
+                    category = item.get("category") or "general"
+                    attributes = item.get("attributes") or {}
+
+                    normalized.append({
+                        "id": f"c3-{pid}",
+                        "name": title,
+                        "merchant_id": merchant,
+                        "category": category,
+                        "unit_price_cents": price_cents,
+                        "currency": currency,
+                        "attributes": attributes,
+                        "recurring": False,
+                        "description": item.get("description", f"{title} from {merchant}"),
+                        "source": "channel3-live",
+                    })
+                if normalized:
+                    return normalized
         except Exception as exc:
             logger.warning("Channel3 live search failed, falling back to curated catalog: %s", exc)
 

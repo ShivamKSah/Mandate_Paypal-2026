@@ -22,6 +22,7 @@ os.environ.update(
     PAYPAL_WEBHOOK_ID="",
     GROQ_API_KEY="",
     LLM_API_KEY="",
+    CHANNEL3_API_KEY="",
     VAULT_ENCRYPTION_KEY="",
 )
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
@@ -32,6 +33,7 @@ def _offline_and_fast(monkeypatch):
     """Keep all tests offline (loopback-only via pytest-socket) with empty LLM keys and patched sleeps."""
     monkeypatch.setenv("GROQ_API_KEY", "")
     monkeypatch.setenv("LLM_API_KEY", "")
+    monkeypatch.setenv("CHANNEL3_API_KEY", "")
     original_async_sleep = asyncio.sleep
 
     async def fast_async_sleep(_seconds):

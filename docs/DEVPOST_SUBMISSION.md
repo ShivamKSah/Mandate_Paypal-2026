@@ -62,7 +62,7 @@ Every proposed cart is evaluated synchronously against active grant parameters b
 | **Render** | Infrastructure-as-code Blueprint in [`render.yaml`](render.yaml) building Docker runtime with PostgreSQL, pre-deploy migrations, and health check probes (`/api/health`). | Blueprint ready; hosted URL pending deployment |
 | **Postman** | OpenAPI-derived 36-endpoint collection in [`docs/mandate.postman_collection.json`](mandate.postman_collection.json) covering all REST routes and schemas. | Collection committed in repo; not published to Postman Network |
 | **Zapier** | Background webhook dispatcher ([`apps/api/mandate/zapier.py`](../apps/api/mandate/zapier.py)) emitting events on policy evaluations, captures, and refunds. Test endpoint at `POST /api/integrations/zapier/test`. | Built & optional; active when `ZAPIER_WEBHOOK_URL` is set in `.env` |
-| **Channel3** | E-commerce product search adapter ([`apps/api/mandate/channel3.py`](../apps/api/mandate/channel3.py)) with query search endpoint `GET /api/integrations/channel3/search`. When `CHANNEL3_API_KEY` is not set, uses curated fallback items. Items are strictly bounded by Mandate's merchant allowlist (`P04`) and budget limits. Default guided demo uses trusted local catalog. | Built & optional; active when `CHANNEL3_API_KEY` is set in `.env` |
+| **Channel3** | E-commerce product search adapter ([`apps/api/mandate/channel3.py`](../apps/api/mandate/channel3.py)) implementing POST `https://api.trychannel3.com/v1/search` with `x-api-key`. When `CHANNEL3_API_KEY` is not set, uses curated fallback items. Items are strictly bounded by Mandate's merchant allowlist (`P04`) and budget limits. Default guided demo uses trusted local catalog. | Built & optional adapter with [MOCKED] tests; live API search is unverified |
 
 ## Challenges
 - **Eliminating silent state drift**: Mapping ambiguous PayPal timeouts/5xx to `UNKNOWN` with held reservations and durable outbox `PayPal-Request-Id` retries required careful row locking so retries never double-charge or leak budget.
@@ -70,9 +70,9 @@ Every proposed cart is evaluated synchronously against active grant parameters b
 
 ## Accomplishments
 - **Verified Live PayPal Sandbox Run (Nov 12, 2026)**: End-to-end execution of `scripts/live_vault_check.py` passed in PayPal Sandbox: vault grant stored (Fernet-encrypted) + `$1.00` setup auto-refunded, `$349.00` proposal approved, autonomous `vault-charge` captured, PayPal `GET` order confirmed `COMPLETED`, `$314.10` (`31410` cents) partial refund executed via recovery case, and SHA-256 audit chain verified valid (`10` events).
-- **Automated Offline Verification**: **210 backend tests** passed (`pytest`, loopback-only socket guard, `[MOCKED]` PayPal/Groq transports, Hypothesis property tests) and **15 frontend boundary tests** passed (`npm test`).
+- **Automated Offline Verification**: **211 backend tests** passed (`pytest`, loopback-only socket guard, `[MOCKED]` PayPal/Groq transports, Hypothesis property tests) and **15 frontend boundary tests** passed (`npm test`).
 - **Synthetic Policy Benchmark** (*Synthetic: scripted scenarios written by the author*): `8 attack kinds (currency_swap, inflated_price, lookalike_merchant, mislabeled_category, off_list_merchant, over_budget, over_cap, subscription_upsell), 50 variants` -> **50 of 50 blocked** (`95% CI 92.86–100.0%`), **0 of 50 false positives** (`95% CI 0.0–7.14%`), `10 of 50` legitimate carts escalated (`95% CI 11.24–33.04%`), `p50=0.918 ms`, `p95=1.311 ms`.
-- *(Still unverified externally: signed PayPal webhook delivery over public HTTPS and hosted Render deployment.)*
+- *(Still unverified externally: signed PayPal webhook delivery over public HTTPS, hosted Render deployment, and live Channel3 API search query.)*
 
 ## What We Learned
 Giving an agent narrow, deterministic guardrails—canonical server pricing, `cart_hash` binding, integer-cent atomic reservations, and explicit `ESCALATE` gates for missing attributes—makes autonomous payments practical without trusting model outputs with money.

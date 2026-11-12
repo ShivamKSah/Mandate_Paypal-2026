@@ -23,7 +23,7 @@ if str(REPO_ROOT / "apps" / "api") not in sys.path:
 
 from mandate.config import load_environment  # noqa: E402
 
-CHANNEL3_BASE_URL = "https://api.channel3.tv/v1"
+CHANNEL3_BASE_URL = "https://api.trychannel3.com"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,26 +39,44 @@ def main(argv: list[str] | None = None) -> int:
 
     masked_key = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "***"
     print(f"CHANNEL3_API_KEY: configured (length={len(api_key)}, masked={masked_key})")
-    print(f"Target URL: {CHANNEL3_BASE_URL}/products/search?q={args.query}&limit=1")
+    print(f"Target URL: POST {CHANNEL3_BASE_URL}/v1/search (query='{args.query}', limit=1)")
 
     try:
         with httpx.Client(timeout=10.0) as client:
-            res = client.get(
-                f"{CHANNEL3_BASE_URL}/products/search",
-                params={"q": args.query, "limit": 1},
-                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+            headers = {
+                "x-api-key": api_key,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+            body = {
+                "query": args.query,
+                "limit": 1,
+            }
+            res = client.post(
+                f"{CHANNEL3_BASE_URL}/v1/search",
+                json=body,
+                headers=headers,
             )
             print(f"HTTP Status: {res.status_code}")
             if res.status_code == 200:
                 data = res.json()
-                items = data.get("products") or data.get("items") or []
-                print(f"Products Found: {len(items)}")
-                if items:
-                    first = items[0]
+                products = data.get("products") or []
+                print(f"Products Found: {len(products)}")
+                if products:
+                    first = products[0]
                     title = first.get("title") or first.get("name") or "(untitled)"
+                    offers = first.get("offers") or []
+                    first_offer = (
+                        offers[0]
+                        if isinstance(offers, list) and len(offers) > 0 and isinstance(offers[0], dict)
+                        else {}
+                    )
+                    price = first_offer.get("price")
                     print(f"First Product Title: {title}")
+                    if price is not None:
+                        print(f"First Product Offer Price: {price}")
                 else:
-                    print("First Product Title: (no items returned for query)")
+                    print("First Product: (no products returned for query)")
                 return 0
             else:
                 print(f"Error: API returned status {res.status_code}")
