@@ -81,7 +81,7 @@ def test_vault_grant_init_and_complete_with_auto_refund_mocked(client, database,
         if request.method == "POST" and request.url.path == "/v2/checkout/orders":
             vault_attrs = body["payment_source"]["paypal"]["attributes"]["vault"]
             assert vault_attrs == {"store_in_vault": "ON_SUCCESS", "usage_type": "MERCHANT", "customer_type": "CONSUMER"}
-            assert "payee" not in body["purchase_units"][0]
+            assert body["purchase_units"][0]["payee"] == {"merchant_id": "MERCHANT123"}
             assert body["purchase_units"][0]["amount"] == {"currency_code": "USD", "value": "1.00"}
             return httpx.Response(201, json={
                 "id": "GRANTORDER1234567",

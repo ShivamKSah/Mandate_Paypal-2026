@@ -14,6 +14,8 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from ..config import normalize_merchant_id
+
 SANDBOX_BASE_URL = "https://api-m.sandbox.paypal.com"
 REQUIRED_ENVIRONMENT = (
     "PAYPAL_CLIENT_ID",
@@ -144,7 +146,7 @@ class PayPalClient:
     ) -> None:
         self._client_id = (os.getenv("PAYPAL_CLIENT_ID", "") if client_id is None else client_id).strip()
         self._client_secret = (os.getenv("PAYPAL_CLIENT_SECRET", "") if client_secret is None else client_secret).strip()
-        self._merchant_id = (os.getenv("PAYPAL_MERCHANT_ID", "") if merchant_id is None else merchant_id).strip()
+        self._merchant_id = normalize_merchant_id(os.getenv("PAYPAL_MERCHANT_ID", "") if merchant_id is None else merchant_id)
         self._webhook_id = (os.getenv("PAYPAL_WEBHOOK_ID", "") if webhook_id is None else webhook_id).strip()
         configured_url = os.getenv("PAYPAL_BASE_URL", SANDBOX_BASE_URL) if base_url is None else base_url
         if configured_url.rstrip("/") != SANDBOX_BASE_URL:
@@ -343,13 +345,13 @@ class PayPalClient:
         self, mandate_id: str, request_id: str, return_url: str, cancel_url: str,
     ) -> dict[str, Any]:
         self._validate_callback_urls(return_url, cancel_url)
-        # First-party vault setup omits purchase_units[].payee so PayPal binds the OAuth app owner merchant without partner consent.
         return await self._request(
             "POST", "/v2/checkout/orders", request_id=request_id, mutation=True,
             body={
                 "intent": "CAPTURE",
                 "purchase_units": [{
                     "reference_id": f"grant-{_provider_id(mandate_id)}",
+                    "payee": {"merchant_id": self._merchant_id},
                     "amount": {"currency_code": "USD", "value": "1.00"},
                     "description": "Mandate vault authorization ($1.00 refundable)",
                 }],
