@@ -772,3 +772,135 @@ def test_grant_complete_payee_not_consented_diagnostics_mocked(client, database,
     assert "PAYEE_NOT_CONSENTED" in mod.likely_cause(502, detail)
     assert "Sandbox Business account" in mod.likely_cause(502, detail)
 
+
+def test_merchant_id_with_quotes_and_spaces_normalizes_and_matches_setup_and_charge_mocked(client, monkeypatch):
+    """[MOCKED] Merchant ID with whitespace/quotes/lowercase normalizes identically across setup, complete, and vault-charge."""
+    _vault_env(monkeypatch)
+    monkeypatch.setenv("PAYPAL_MERCHANT_ID", '  "merchant123"  ')
+    seen_payees = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "tok", "token_type": "Bearer", "expires_in": 3600})
+        body = json.loads(request.content.decode()) if request.content else {}
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders":
+            payee_id = body["purchase_units"][0]["payee"]["merchant_id"]
+            seen_payees.append(payee_id)
+            if "vault_id" in body.get("payment_source", {}).get("paypal", {}):
+                return httpx.Response(201, json={
+                    "id": "NORMVC12345678901",
+                    "status": "COMPLETED",
+                    "purchase_units": [{
+                        "payee": {"merchant_id": "MERCHANT123"},
+                        "payments": {"captures": [{"id": "NORMVCCAP1", "status": "COMPLETED", "amount": {"currency_code": "USD", "value": "349.00"}}]},
+                    }],
+                })
+            return httpx.Response(201, json={
+                "id": "NORMGRANT12345678",
+                "status": "PAYER_ACTION_REQUIRED",
+                "links": [{"rel": "approve", "href": "https://www.sandbox.paypal.com/checkoutnow?token=NORMGRANT12345678"}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders/NORMGRANT12345678/capture":
+            return httpx.Response(201, json={
+                "id": "NORMGRANT12345678",
+                "status": "COMPLETED",
+                "payment_source": {"paypal": {"attributes": {"vault": {"id": "VAULT-NORM-111", "status": "VAULTED"}}}},
+                "purchase_units": [{"payee": {"merchant_id": "MERCHANT123"}, "payments": {"captures": [{"id": "NORMCAP1", "status": "COMPLETED"}]}}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/payments/captures/NORMCAP1/refund":
+            return httpx.Response(201, json={"id": "NORMREF1", "status": "COMPLETED"})
+        raise AssertionError(f"Unexpected call: {request.method} {request.url.path}")
+
+    _install_mock_paypal(monkeypatch, handler)
+    grant = _create_grant(client)
+    assert client.post(f"/api/mandates/{grant['id']}/grant/init", json={}).status_code == 200
+    assert client.post(f"/api/mandates/{grant['id']}/grant/complete", json={}).status_code == 200
+    proposal = _create_approved_proposal(client, grant["id"], intent="norm-vc")
+    charge = client.post(f"/api/payments/{proposal['payment_id']}/vault-charge", json={})
+    assert charge.status_code == 200
+    assert charge.json()["status"] == "CAPTURED"
+    assert seen_payees == ["MERCHANT123", "MERCHANT123"]
+
+
+def test_real_payee_mismatch_returns_masked_expected_and_actual_ids_and_hint_mocked(client, database, monkeypatch):
+    """[MOCKED] Real payee mismatch fails with PAYEE_MISMATCH, masked ABC...XYZ ids, and actionable fix hint."""
+    _vault_env(monkeypatch)
+    monkeypatch.setenv("PAYPAL_MERCHANT_ID", "ABC1234567XYZ")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "tok", "token_type": "Bearer", "expires_in": 3600})
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders":
+            return httpx.Response(201, json={
+                "id": "MISMATCHORDER1234",
+                "status": "PAYER_ACTION_REQUIRED",
+                "links": [{"rel": "approve", "href": "https://www.sandbox.paypal.com/checkoutnow?token=MISMATCHORDER1234"}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders/MISMATCHORDER1234/capture":
+            return httpx.Response(201, json={
+                "id": "MISMATCHORDER1234",
+                "status": "COMPLETED",
+                "payment_source": {"paypal": {"attributes": {"vault": {"id": "VAULT-MM-1", "status": "VAULTED"}}}},
+                "purchase_units": [{"payee": {"merchant_id": "DEF9876543UVW"}, "payments": {"captures": [{"id": "MMCAP1", "status": "COMPLETED"}]}}],
+            })
+        raise AssertionError(f"Unexpected call: {request.method} {request.url.path}")
+
+    _install_mock_paypal(monkeypatch, handler)
+    grant = _create_grant(client)
+    assert client.post(f"/api/mandates/{grant['id']}/grant/init", json={}).status_code == 200
+    res = client.post(f"/api/mandates/{grant['id']}/grant/complete", json={})
+    assert res.status_code == 502
+    detail = res.json()["detail"]
+    assert "PAYEE_MISMATCH" in detail
+    assert "expected=ABC...XYZ" in detail
+    assert "actual=DEF...UVW" in detail
+    assert "PAYPAL_MERCHANT_ID" in detail
+    assert "ABC1234567XYZ" not in detail
+    assert "DEF9876543UVW" not in detail
+
+    with database() as db:
+        ev = db.scalars(select(AuditEvent).where(AuditEvent.event_type == "GRANT_FAILED", AuditEvent.entity_id == grant["id"])).first()
+        assert ev.details["expected_merchant"] == "ABC...XYZ"
+        assert ev.details["actual_merchant"] == "DEF...UVW"
+
+    import importlib.util
+    from pathlib import Path
+    script_path = Path(__file__).resolve().parents[3] / "scripts" / "live_vault_check.py"
+    spec = importlib.util.spec_from_file_location("live_vault_check", script_path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    cause = mod.likely_cause(502, detail)
+    assert "expected=ABC...XYZ" in cause
+    assert "actual=DEF...UVW" in cause
+    assert ".env" in cause
+
+
+def test_config_detects_stale_os_env_and_inner_outer_env_conflicts(tmp_path, monkeypatch):
+    """Config audit overrides stale OS env in dev mode and reports stale-OS + inner/outer .env conflicts."""
+    from mandate.config import load_environment
+
+    outer_dir = tmp_path / "outer"
+    inner_dir = outer_dir / "inner"
+    inner_dir.mkdir(parents=True)
+    inner_env = inner_dir / ".env"
+    outer_env = outer_dir / ".env"
+    inner_env.write_text('PAYPAL_MERCHANT_ID="new9876543999"\n', encoding="utf-8")
+    outer_env.write_text("PAYPAL_MERCHANT_ID=out1111111222\n", encoding="utf-8")
+    monkeypatch.setenv("PAYPAL_MERCHANT_ID", "OLD0000000111")
+
+    diag = load_environment(
+        env_path=inner_env,
+        allow_override=True,
+        inner_path=inner_env,
+        outer_path=outer_env,
+    )
+    assert diag["merchant_length"] == 13
+    assert diag["masked_merchant_id"] == "NEW...999"
+    assert diag["stale_os_conflict"] is not None
+    assert "OLD...111" in diag["stale_os_conflict"]
+    assert "NEW...999" in diag["stale_os_conflict"]
+    assert diag["inner_outer_conflict"] is not None
+    assert "NEW...999" in diag["inner_outer_conflict"]
+    assert "OUT...222" in diag["inner_outer_conflict"]
+
