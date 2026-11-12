@@ -266,7 +266,7 @@ export function Overview({
                     </a>
                   )}
                   <button
-                    className="button-quiet"
+                    className="button-outline"
                     disabled={working || !paypalConfigured}
                     title={
                       !paypalConfigured
@@ -313,22 +313,24 @@ export function Overview({
                   )}
                 </div>
               )}
-              <button
-                className="button-quiet danger"
-                disabled={working}
-                onClick={() =>
-                  void action(() => api.revoke(grant.id), "Grant revoked.")
-                }
-              >
-                Revoke future spending
-              </button>
-              <button
-                className="button-quiet"
-                disabled={working}
-                onClick={() => setCreatingGrant(true)}
-              >
-                Create another grant
-              </button>
+              <div className="grant-footer-actions">
+                <button
+                  className="button-quiet danger"
+                  disabled={working}
+                  onClick={() =>
+                    void action(() => api.revoke(grant.id), "Grant revoked.")
+                  }
+                >
+                  Revoke future spending
+                </button>
+                <button
+                  className="button-quiet"
+                  disabled={working}
+                  onClick={() => setCreatingGrant(true)}
+                >
+                  Create another grant
+                </button>
+              </div>
             </>
           ) : (
             <form className="grant-form" onSubmit={(e) => void submitGrant(e)}>
@@ -502,7 +504,9 @@ export function Overview({
                     {item.id.slice(0, 8)} · Expires {date(item.expires_at)}
                   </small>
                 </div>
-                <span className="status-pill">
+                <span
+                  className={`status-pill ${activeGrants.some((active) => active.id === item.id) ? "active" : "draft"}`}
+                >
                   {activeGrants.some((active) => active.id === item.id)
                     ? "ACTIVE"
                     : item.status === "ACTIVE"

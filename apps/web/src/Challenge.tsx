@@ -71,6 +71,7 @@ export function Challenge({
         action={
           <button
             className="button-dark"
+            aria-label={`Run all ${attacks.length} attacks`}
             disabled={working || attacks.length === 0}
             onClick={() => void runAll()}
           >

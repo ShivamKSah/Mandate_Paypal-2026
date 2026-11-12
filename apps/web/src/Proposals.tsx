@@ -270,7 +270,7 @@ export function Proposals({
               <span>Allow rules planner fallback if LLM is unavailable</span>
             </label>
             <button
-              className="button-quiet"
+              className="button-outline"
               disabled={working || !grant || !agentInstruction.trim()}
               onClick={() =>
                 grant &&

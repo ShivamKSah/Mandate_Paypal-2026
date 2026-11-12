@@ -80,6 +80,7 @@ summary:focus-visible {
 .app-shell {
   --rail-width: 88px;
   min-height: 100vh;
+  padding-left: var(--rail-width);
 }
 .rail {
   position: fixed;
@@ -203,16 +204,20 @@ summary:focus-visible {
   box-shadow: 0 0 0 3px var(--paper);
 }
 .main-content {
-  margin-left: var(--rail-width);
+  width: 100%;
+  margin: 0 auto;
   padding: 0 clamp(20px, 3vw, 40px) 64px;
-  max-width: calc(var(--rail-width) + 1140px);
+  max-width: 1200px;
 }
 .topbar {
-  min-height: 82px;
+  min-height: 78px;
   border-bottom: 1px solid var(--line);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 0;
   color: var(--muted);
   font-size: 13px;
 }
@@ -226,8 +231,9 @@ summary:focus-visible {
 }
 .top-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
 }
 .mode-chip {
   display: flex;
@@ -385,7 +391,7 @@ summary:focus-visible {
 .button-quiet {
   background: transparent;
   color: var(--muted);
-  padding: 8px 0;
+  padding: 8px 10px;
 }
 .button-quiet:hover {
   color: var(--accent);
@@ -420,6 +426,8 @@ summary:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
   border-radius: 20px;
   padding: 5px 9px;
   font:
@@ -478,7 +486,8 @@ summary:focus-visible {
 }
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
   gap: 11px;
 }
 .grant-form input,

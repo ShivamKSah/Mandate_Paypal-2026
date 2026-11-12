@@ -37,7 +37,7 @@
   }
   .rail-footer .live-dot {
     position: absolute;
-    inset: auto 12px 0 auto;
+    inset: 17px 16px auto auto;
   }
 }
 @media (min-width: 1180px) {
@@ -76,6 +76,11 @@
     gap: 12px;
     font-size: 13px;
     text-align: left;
+  }
+  .nav-item i {
+    position: static;
+    inset: auto;
+    margin-left: auto;
   }
   .rail nav {
     gap: 7px;
@@ -393,8 +398,17 @@
 .overview-grid .transactions-panel {
   grid-area: transactions;
 }
-.grant-panel .button-quiet {
-  margin-right: 16px;
+.grant-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.grant-footer-actions .button-quiet {
+  padding-inline: 0;
 }
 .transaction-list {
   margin-top: 16px;
@@ -493,14 +507,22 @@
   margin: 0 0 14px;
 }
 .grant-history-row {
+  display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
   font-size: 12px;
 }
 .grant-history-row > div {
-  flex-basis: 45%;
+  flex: 1 1 220px;
+}
+.grant-history-row > b {
+  font: 600 13px var(--display);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
 }
 .grant-history-row small {
-  font-size: 10px;
+  font-size: 11px;
 }
 .ledger-line {
   flex-wrap: wrap;
@@ -548,9 +570,19 @@
     padding-left: 9px;
     margin-left: 2px;
   }
+  .app-shell {
+    padding-left: 0;
+  }
+  .main-content {
+    margin: 0;
+    max-width: none;
+    padding: 0 16px calc(92px + env(safe-area-inset-bottom));
+  }
   .topbar {
-    min-height: 78px;
-    border-bottom: 0;
+    height: auto;
+    min-height: 64px;
+    border-bottom: 1px solid var(--line);
+    padding: 10px 0;
     gap: 8px;
   }
   .breadcrumb,
@@ -558,7 +590,7 @@
     display: none;
   }
   .top-actions {
-    gap: 10px;
+    gap: 8px;
   }
   .top-actions .icon-button {
     background: var(--white);
@@ -566,11 +598,14 @@
     border-radius: 50%;
   }
   .top-actions .button-quiet {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--muted);
   }
   .page-title {
-    margin: 20px 0 24px;
+    margin: 20px 0 20px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
   }
   .page-title .eyebrow {
     font:
@@ -583,16 +618,7 @@
     letter-spacing: -0.8px;
   }
   .page-title p {
-    font-size: 12px;
-  }
-  .page-title > .button-dark {
-    flex: 0 0 40px;
-    min-height: 40px;
-    border-radius: 50%;
-    padding: 10px;
-  }
-  .page-title > .button-dark > span {
-    display: none;
+    font-size: 13px;
   }
   .overview-grid {
     grid-template-columns: minmax(0, 1fr);

@@ -108,89 +108,91 @@ export function Payments({
                   </p>
                 )}
                 <div className="payment-actions">
-                  {pay.can_cancel && (
-                    <button
-                      className="button-quiet danger"
-                      disabled={working}
-                      onClick={() =>
-                        void action(
-                          () => api.cancelPayment(pay.id),
-                          "Reservation cancelled and budget released.",
-                        )
-                      }
-                    >
-                      Cancel reservation
-                    </button>
-                  )}
-                  {available.approval && configured && pay.approval_url && (
-                    <a
-                      className="button-outline"
-                      href={pay.approval_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Continue with PayPal <ArrowUpRight size={14} />
-                    </a>
-                  )}
-                  {available.vaultCharge && (
-                    <button
-                      className="button-dark"
-                      disabled={working || !configured}
-                      title={
-                        !configured
-                          ? "PayPal Sandbox is not configured in this environment."
-                          : undefined
-                      }
-                      onClick={() =>
-                        void action(
-                          () => api.vaultCharge(pay.id),
-                          "Autonomous vault charge completed.",
-                        )
-                      }
-                    >
-                      Charge vaulted PayPal
-                    </button>
-                  )}
-                  {available.checkout && (
-                    <button
-                      className="button-quiet"
-                      disabled={working || !configured}
-                      title={
-                        !configured
-                          ? "PayPal Sandbox is not configured in this environment."
-                          : undefined
-                      }
-                      onClick={() =>
-                        void action(
-                          () => api.checkout(pay.id),
-                          "Checkout request completed.",
-                        )
-                      }
-                    >
-                      {available.vaultCharge
-                        ? "Fallback: buyer checkout"
-                        : "Start checkout"}
-                    </button>
-                  )}
-                  {available.capture && (
-                    <button
-                      className="button-quiet"
-                      disabled={working || !configured}
-                      title={
-                        !configured
-                          ? "PayPal Sandbox is not configured in this environment."
-                          : undefined
-                      }
-                      onClick={() =>
-                        void action(
-                          () => api.capture(pay.id),
-                          "Capture request completed.",
-                        )
-                      }
-                    >
-                      Capture order after buyer approval
-                    </button>
-                  )}
+                  <div className="payment-action-buttons">
+                    {pay.can_cancel && (
+                      <button
+                        className="button-quiet danger"
+                        disabled={working}
+                        onClick={() =>
+                          void action(
+                            () => api.cancelPayment(pay.id),
+                            "Reservation cancelled and budget released.",
+                          )
+                        }
+                      >
+                        Cancel reservation
+                      </button>
+                    )}
+                    {available.approval && configured && pay.approval_url && (
+                      <a
+                        className="button-outline"
+                        href={pay.approval_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Continue with PayPal <ArrowUpRight size={14} />
+                      </a>
+                    )}
+                    {available.vaultCharge && (
+                      <button
+                        className="button-dark"
+                        disabled={working || !configured}
+                        title={
+                          !configured
+                            ? "PayPal Sandbox is not configured in this environment."
+                            : undefined
+                        }
+                        onClick={() =>
+                          void action(
+                            () => api.vaultCharge(pay.id),
+                            "Autonomous vault charge completed.",
+                          )
+                        }
+                      >
+                        Charge vaulted PayPal
+                      </button>
+                    )}
+                    {available.checkout && (
+                      <button
+                        className="button-quiet"
+                        disabled={working || !configured}
+                        title={
+                          !configured
+                            ? "PayPal Sandbox is not configured in this environment."
+                            : undefined
+                        }
+                        onClick={() =>
+                          void action(
+                            () => api.checkout(pay.id),
+                            "Checkout request completed.",
+                          )
+                        }
+                      >
+                        {available.vaultCharge
+                          ? "Fallback: buyer checkout"
+                          : "Start checkout"}
+                      </button>
+                    )}
+                    {available.capture && (
+                      <button
+                        className="button-quiet"
+                        disabled={working || !configured}
+                        title={
+                          !configured
+                            ? "PayPal Sandbox is not configured in this environment."
+                            : undefined
+                        }
+                        onClick={() =>
+                          void action(
+                            () => api.capture(pay.id),
+                            "Capture request completed.",
+                          )
+                        }
+                      >
+                        Capture order after buyer approval
+                      </button>
+                    )}
+                  </div>
                   {!configured &&
                     (available.vaultCharge ||
                       available.checkout ||
