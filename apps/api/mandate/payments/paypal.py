@@ -92,6 +92,11 @@ def provider_failure_message(error: PayPalError, fallback: str) -> str:
             summary = "Approve this order in PayPal before capturing; the reservation is retained"
         elif error.issue == "INSTRUMENT_DECLINED":
             summary = "PayPal declined the funding source; return to PayPal and choose another payment method"
+        elif error.issue == "PAYEE_NOT_CONSENTED" or "PAYEE_NOT_CONSENTED" in error.issues:
+            summary = (
+                "PayPal rejected the request (PAYEE_NOT_CONSENTED): verify PAYPAL_MERCHANT_ID belongs to "
+                "the exact Sandbox Business account linked to PAYPAL_CLIENT_ID"
+            )
         elif error.status_code in {401, 403}:
             summary = "PayPal rejected the application credentials or merchant permissions; check the sandbox configuration"
     parts = [f"code={error.code}"]
@@ -137,10 +142,10 @@ class PayPalClient:
         http_client: httpx.AsyncClient | None = None,
         timeout: float = 15.0,
     ) -> None:
-        self._client_id = os.getenv("PAYPAL_CLIENT_ID", "") if client_id is None else client_id
-        self._client_secret = os.getenv("PAYPAL_CLIENT_SECRET", "") if client_secret is None else client_secret
-        self._merchant_id = os.getenv("PAYPAL_MERCHANT_ID", "") if merchant_id is None else merchant_id
-        self._webhook_id = os.getenv("PAYPAL_WEBHOOK_ID", "") if webhook_id is None else webhook_id
+        self._client_id = (os.getenv("PAYPAL_CLIENT_ID", "") if client_id is None else client_id).strip()
+        self._client_secret = (os.getenv("PAYPAL_CLIENT_SECRET", "") if client_secret is None else client_secret).strip()
+        self._merchant_id = (os.getenv("PAYPAL_MERCHANT_ID", "") if merchant_id is None else merchant_id).strip()
+        self._webhook_id = (os.getenv("PAYPAL_WEBHOOK_ID", "") if webhook_id is None else webhook_id).strip()
         configured_url = os.getenv("PAYPAL_BASE_URL", SANDBOX_BASE_URL) if base_url is None else base_url
         if configured_url.rstrip("/") != SANDBOX_BASE_URL:
             raise PayPalError("Only the PayPal sandbox API is permitted.", code="UNSAFE_CONFIGURATION")
@@ -338,13 +343,13 @@ class PayPalClient:
         self, mandate_id: str, request_id: str, return_url: str, cancel_url: str,
     ) -> dict[str, Any]:
         self._validate_callback_urls(return_url, cancel_url)
+        # First-party vault setup omits purchase_units[].payee so PayPal binds the OAuth app owner merchant without partner consent.
         return await self._request(
             "POST", "/v2/checkout/orders", request_id=request_id, mutation=True,
             body={
                 "intent": "CAPTURE",
                 "purchase_units": [{
                     "reference_id": f"grant-{_provider_id(mandate_id)}",
-                    "payee": {"merchant_id": self._merchant_id},
                     "amount": {"currency_code": "USD", "value": "1.00"},
                     "description": "Mandate vault authorization ($1.00 refundable)",
                 }],

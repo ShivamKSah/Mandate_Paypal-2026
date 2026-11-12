@@ -48,6 +48,12 @@ def likely_cause(status_code: int, detail: str) -> str:
         return "Likely cause: buyer approval in PayPal was not finished before pressing Enter. Sign in as the sandbox Personal buyer and complete approval on the URL first."
     if "INSTRUMENT_DECLINED" in upper:
         return "Likely cause: sandbox buyer funding instrument was declined; pick another funding source in PayPal."
+    if "PAYEE_NOT_CONSENTED" in upper:
+        return (
+            "Likely cause: PayPal returned 403 PAYEE_NOT_CONSENTED. Verify PAYPAL_MERCHANT_ID in .env matches "
+            "the exact Sandbox Business account linked to PAYPAL_CLIENT_ID (Apps & Credentials -> App -> Sandbox account), "
+            "not another sandbox business or personal buyer account."
+        )
     if "PAYEE_MISMATCH" in upper:
         return "Likely cause: PAYPAL_MERCHANT_ID does not match the sandbox Business account linked to your PayPal REST app."
     if "VAULT_TOKEN" in upper or "VAULT_INSTRUCTION" in upper or status_code == 409 and "VAULT" in upper:

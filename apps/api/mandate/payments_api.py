@@ -111,12 +111,12 @@ def save_failure(db, owner, operation_id, payment_id, error, result=None):
 
 
 def _payee_mismatch(result):
-    expected = os.getenv("PAYPAL_MERCHANT_ID")
+    expected = (os.getenv("PAYPAL_MERCHANT_ID") or "").strip()
     units = result.get("purchase_units") if isinstance(result, dict) else None
     if not expected or not isinstance(units, list) or len(units) != 1 or not isinstance(units[0], dict):
         return False
     payee = units[0].get("payee")
-    return isinstance(payee, dict) and payee.get("merchant_id") != expected
+    return isinstance(payee, dict) and str(payee.get("merchant_id") or "").strip() != expected
 
 
 @router.get("")

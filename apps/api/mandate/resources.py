@@ -60,12 +60,13 @@ def _extract_capture_id(payload):
 
 
 def _setup_payee_mismatch(payload):
-    expected = os.getenv("PAYPAL_MERCHANT_ID")
+    expected = (os.getenv("PAYPAL_MERCHANT_ID") or "").strip()
     units = payload.get("purchase_units") if isinstance(payload, dict) else None
     if not expected or not isinstance(units, list) or not units or not isinstance(units[0], dict):
         return False
     payee = units[0].get("payee")
-    return isinstance(payee, dict) and payee.get("merchant_id") != expected
+    actual = payee.get("merchant_id") if isinstance(payee, dict) else None
+    return isinstance(actual, str) and actual.strip() != expected
 
 
 @router.post("/mandates")

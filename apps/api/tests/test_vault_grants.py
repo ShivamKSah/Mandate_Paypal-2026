@@ -81,6 +81,7 @@ def test_vault_grant_init_and_complete_with_auto_refund_mocked(client, database,
         if request.method == "POST" and request.url.path == "/v2/checkout/orders":
             vault_attrs = body["payment_source"]["paypal"]["attributes"]["vault"]
             assert vault_attrs == {"store_in_vault": "ON_SUCCESS", "usage_type": "MERCHANT", "customer_type": "CONSUMER"}
+            assert "payee" not in body["purchase_units"][0]
             assert body["purchase_units"][0]["amount"] == {"currency_code": "USD", "value": "1.00"}
             return httpx.Response(201, json={
                 "id": "GRANTORDER1234567",
@@ -721,4 +722,53 @@ def test_live_vault_check_http_error_reporting_prints_redacted_detail(capsys):
     assert "ORDER_NOT_APPROVED" in err
     assert "DBG-422" in err
     assert "Likely cause:" in err
+
+
+def test_grant_complete_payee_not_consented_diagnostics_mocked(client, database, monkeypatch, capsys):
+    """[MOCKED] 403 PAYEE_NOT_CONSENTED surfaces actionable Sandbox Business account mismatch detail."""
+    _vault_env(monkeypatch)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "tok", "token_type": "Bearer", "expires_in": 3600})
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders":
+            return httpx.Response(201, json={
+                "id": "CONSENTORDER12345",
+                "status": "PAYER_ACTION_REQUIRED",
+                "links": [{"rel": "approve", "href": "https://www.sandbox.paypal.com/checkoutnow?token=CONSENTORDER12345"}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders/CONSENTORDER12345/capture":
+            return httpx.Response(403, json={
+                "name": "NOT_AUTHORIZED",
+                "debug_id": "DBG-CONSENT-403",
+                "details": [{"issue": "PAYEE_NOT_CONSENTED"}],
+            })
+        raise AssertionError(f"Unexpected call: {request.method} {request.url.path}")
+
+    _install_mock_paypal(monkeypatch, handler)
+    grant = _create_grant(client)
+    assert client.post(f"/api/mandates/{grant['id']}/grant/init", json={}).status_code == 200
+    res = client.post(f"/api/mandates/{grant['id']}/grant/complete", json={})
+    assert res.status_code == 502
+    detail = res.json()["detail"]
+    assert "PAYEE_NOT_CONSENTED" in detail
+    assert "PAYPAL_MERCHANT_ID" in detail
+    assert "debug_id=DBG-CONSENT-403" in detail
+
+    with database() as db:
+        ev = db.scalars(select(AuditEvent).where(AuditEvent.event_type == "GRANT_FAILED", AuditEvent.entity_id == grant["id"])).first()
+        assert ev.details["reason"] == "PAYEE_NOT_CONSENTED"
+        assert ev.details["provider_status"] == 403
+        assert ev.details["provider_error"] == "NOT_AUTHORIZED"
+        assert ev.details["provider_debug_id"] == "DBG-CONSENT-403"
+
+    import importlib.util
+    from pathlib import Path
+    script_path = Path(__file__).resolve().parents[3] / "scripts" / "live_vault_check.py"
+    spec = importlib.util.spec_from_file_location("live_vault_check", script_path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert "PAYEE_NOT_CONSENTED" in mod.likely_cause(502, detail)
+    assert "Sandbox Business account" in mod.likely_cause(502, detail)
 

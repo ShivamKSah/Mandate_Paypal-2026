@@ -50,7 +50,7 @@ def settle_order(db, operation_id, result):
             return False
         payee, amount = units[0].get("payee"), units[0].get("amount")
         expected = f"{payment.amount_cents // 100}.{payment.amount_cents % 100:02d}"
-        if (not isinstance(payee, dict) or payee.get("merchant_id") != os.getenv("PAYPAL_MERCHANT_ID")
+        if (not isinstance(payee, dict) or str(payee.get("merchant_id") or "").strip() != (os.getenv("PAYPAL_MERCHANT_ID") or "").strip()
                 or not isinstance(amount, dict) or amount.get("currency_code") != "USD" or amount.get("value") != expected):
             return False
     if operation.status == "COMPLETED":
@@ -73,7 +73,7 @@ def capture_from_order(result, payment):
     if not isinstance(units, list) or len(units) != 1 or not isinstance(units[0], dict):
         return None
     payee, payments = units[0].get("payee", {}), units[0].get("payments", {})
-    if not isinstance(payee, dict) or payee.get("merchant_id") != os.getenv("PAYPAL_MERCHANT_ID") or not isinstance(payments, dict):
+    if not isinstance(payee, dict) or str(payee.get("merchant_id") or "").strip() != (os.getenv("PAYPAL_MERCHANT_ID") or "").strip() or not isinstance(payments, dict):
         return None
     captures = payments.get("captures", [])
     if not isinstance(captures, list) or len(captures) != 1 or not isinstance(captures[0], dict):
