@@ -466,9 +466,9 @@ export function Overview({
             </button>
           </div>
           <div className="ledger-state">
-            <span className="ledger-check">
+            <div className="ledger-check" aria-hidden="true">
               <ShieldCheck size={19} />
-            </span>
+            </div>
             <div>
               <strong>
                 {proposals.length > 0

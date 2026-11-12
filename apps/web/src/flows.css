@@ -140,11 +140,18 @@
 }
 .rule-icon {
   flex: none;
-  width: 21px;
-  height: 21px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.rule-icon svg {
+  display: block;
+  margin: 0;
+  flex: none;
 }
 .rule-icon.pass {
   color: var(--green);
@@ -283,13 +290,20 @@
 }
 .payment-symbol {
   flex: none;
-  width: 35px;
-  height: 35px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
   background: var(--accent-soft);
   color: var(--accent);
+}
+.payment-symbol svg {
+  display: block;
+  margin: 0;
+  flex: none;
 }
 .payment-desc {
   flex: 1;
@@ -1089,9 +1103,16 @@
   border-radius: 50%;
   background: var(--accent-soft);
   color: var(--accent);
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
   font: 600 12px var(--mono);
+}
+.guided-check svg {
+  display: block;
+  margin: 0;
+  flex: none;
 }
 .guided-step.done .guided-check {
   background: var(--green-soft);

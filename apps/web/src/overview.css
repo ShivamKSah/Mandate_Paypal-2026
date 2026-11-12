@@ -450,13 +450,20 @@
   color: var(--accent);
 }
 .transaction-icon {
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
   flex: 0 0 40px;
   height: 40px;
   border-radius: 13px;
   background: var(--accent-soft);
   color: var(--accent);
+}
+.transaction-icon svg {
+  display: block;
+  margin: 0;
+  flex: none;
 }
 .transaction-icon.settled {
   background: var(--green-soft);

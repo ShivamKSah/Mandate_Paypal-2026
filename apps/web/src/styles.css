@@ -351,9 +351,17 @@ summary:focus-visible {
   border: 1px solid var(--line);
   background: var(--white);
   border-radius: 12px;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
   color: var(--muted);
+  padding: 0;
+}
+.icon-button svg {
+  display: block;
+  margin: 0;
+  flex: none;
 }
 .icon-button:hover {
   border-color: var(--accent);
@@ -371,13 +379,22 @@ summary:focus-visible {
   color: var(--amber);
 }
 .banner-icon {
-  display: grid;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.banner-icon svg {
+  display: block;
+  margin: 0;
+  flex: none;
 }
 .provider-banner div {
   flex: 1;
 }
-.provider-banner strong,
-.provider-banner span {
+.provider-banner div strong,
+.provider-banner div span {
   display: block;
 }
 .provider-banner strong {
@@ -652,11 +669,18 @@ summary:focus-visible {
   border-top: 1px solid var(--line);
 }
 .decision-mark {
-  width: 29px;
-  height: 29px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  flex: none;
+}
+.decision-mark svg {
+  display: block;
+  margin: 0;
   flex: none;
 }
 .decision-mark.approve {
@@ -743,20 +767,30 @@ summary:focus-visible {
 .ledger-state {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   padding: 18px 0 13px;
 }
-.ledger-check {
-  width: 34px;
-  height: 34px;
+.ledger-check,
+.ledger-state .ledger-check {
+  flex: none;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
   color: var(--green);
   background: var(--green-soft);
 }
-.ledger-state strong,
-.ledger-state span {
+.ledger-check svg,
+.ledger-state .ledger-check svg {
+  display: block;
+  margin: 0;
+  flex: none;
+}
+.ledger-state > div:not(.ledger-check) strong,
+.ledger-state > div:not(.ledger-check) span {
   display: block;
 }
 .ledger-state strong {
