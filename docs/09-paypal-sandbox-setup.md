@@ -124,8 +124,11 @@ npm.cmd --prefix apps/web ci
 npm.cmd --prefix apps/web run build
 .venv/Scripts/python.exe -m mandate.migrate
 .venv/Scripts/python.exe -m mandate.check_setup
+.venv/Scripts/python.exe scripts/predeploy_check.py
 ./scripts/run-api.ps1
 ```
+
+`scripts/predeploy_check.py` performs an offline production checklist across `APP_ENV`, `PUBLIC_DEMO`, `COOKIE_SECURE`, HTTPS `PUBLIC_BASE_URL`, `ALLOWED_HOSTS`, PayPal credentials + sandbox guard, `VAULT_ENCRYPTION_KEY` Fernet validity, `GROQ_API_KEY`, and PostgreSQL `DATABASE_URL` without printing any values.
 
 The existing local database was backed up and migrated during this work. For a fresh database, the normal migrate command initializes it. An old unversioned prototype needs a backup and explicit adoption; do not force-stamp a schema that the migration tool rejects.
 
