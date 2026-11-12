@@ -11,13 +11,15 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
-from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(REPO_ROOT / ".env")
+if str(REPO_ROOT / "apps" / "api") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "apps" / "api"))
+
+from mandate.config import ENV_DIAGNOSTICS, load_environment  # noqa: E402
 
 PAYPAL_TXN_ID_RE = re.compile(r"^[0-9A-Z]{17}$")
 BANNED_MOCK_MARKERS = ("mock", "synthetic", "fake", "dummy", "test-token", "pinned", "order-pp", "capture-pp")
@@ -55,7 +57,15 @@ def likely_cause(status_code: int, detail: str) -> str:
             "not another sandbox business or personal buyer account."
         )
     if "PAYEE_MISMATCH" in upper:
-        return "Likely cause: PAYPAL_MERCHANT_ID does not match the sandbox Business account linked to your PayPal REST app."
+        exp_match = re.search(r"expected=([^\s,)]+)", detail)
+        act_match = re.search(r"actual=([^\s,)]+)", detail)
+        expected_id = exp_match.group(1) if exp_match else "(see detail)"
+        actual_id = act_match.group(1) if act_match else "(see detail)"
+        return (
+            f"Likely cause: PAYEE_MISMATCH (expected={expected_id}, PayPal actual={actual_id}). "
+            f"Edit PAYPAL_MERCHANT_ID in {REPO_ROOT / '.env'} to match PayPal's Sandbox Business merchant ID ({actual_id}), "
+            f"or switch PAYPAL_CLIENT_ID/PAYPAL_CLIENT_SECRET in {REPO_ROOT / '.env'} to the app owned by {expected_id}."
+        )
     if "VAULT_TOKEN" in upper or "VAULT_INSTRUCTION" in upper or status_code == 409 and "VAULT" in upper:
         return "Likely cause: PayPal did not issue an active vault token. Enable Features -> Vault on your Sandbox REST app in PayPal Developer Dashboard."
     if status_code in {401, 403} or "STATUS=401" in upper or "STATUS=403" in upper or "NOT_AUTHORIZED" in upper or "PERMISSION_DENIED" in upper:
@@ -83,6 +93,13 @@ def check_response(resp, step: str) -> dict:
 
 
 def require_env():
+    diag = load_environment(REPO_ROOT / ".env", allow_override=True)
+    print(f"ENV loaded: {diag['loaded_env_path']}")
+    print(f"PAYPAL_MERCHANT_ID: length={diag['merchant_length']} masked={diag['masked_merchant_id']}")
+    if diag.get("stale_os_conflict"):
+        print(f"WARNING: {diag['stale_os_conflict']}")
+    if diag.get("inner_outer_conflict"):
+        print(f"WARNING: {diag['inner_outer_conflict']}")
     required = ("DATABASE_URL", "PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_MERCHANT_ID", "VAULT_ENCRYPTION_KEY")
     missing = [name for name in required if not os.getenv(name, "").strip()]
     if missing:
