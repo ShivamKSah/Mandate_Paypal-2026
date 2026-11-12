@@ -33,6 +33,7 @@ def main():
         f"PAYPAL_MERCHANT_ID: length={diag['merchant_length']} "
         f"masked={diag['masked_merchant_id']}"
     )
+    print(f"VAULT_AUTONOMY_VERIFIED: {str(config.VAULT_AUTONOMY_VERIFIED).lower()} (labels only)")
     if diag.get("stale_os_conflict"):
         print(f"WARNING: {diag['stale_os_conflict']}")
     if diag.get("inner_outer_conflict"):

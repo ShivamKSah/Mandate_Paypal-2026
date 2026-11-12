@@ -353,6 +353,7 @@ export default function App() {
                 setSelectedGrantId(created.id);
               }}
               paypalConfigured={Boolean(session?.paypal_configured)}
+              vaultAutonomyVerified={Boolean(session?.vault_autonomy_verified)}
             />
           )}
           {view === "proposals" && (
@@ -396,6 +397,7 @@ export default function App() {
               working={working}
               action={action}
               configured={Boolean(session?.paypal_configured)}
+              vaultAutonomyVerified={Boolean(session?.vault_autonomy_verified)}
               callbackOrderId={callbackOrderId}
             />
           )}

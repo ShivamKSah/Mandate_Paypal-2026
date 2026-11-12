@@ -1,3 +1,10 @@
+# First-deploy checklist on Render:
+# 1. Create the Blueprint from render.yaml so Render provisions mandate-db and prompts for sync: false vars.
+# 2. Set PUBLIC_BASE_URL=https://<your-service>.onrender.com and ALLOWED_HOSTS=<your-service>.onrender.com BEFORE booting.
+# 3. Enter PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_MERCHANT_ID, PAYPAL_WEBHOOK_ID, VAULT_ENCRYPTION_KEY, and GROQ_API_KEY.
+# 4. Wait for deploy + automatic `python -m mandate.migrate` + `/api/health` green check.
+# 5. In PayPal Developer Dashboard -> Mandate app -> Features enable Vault; register webhook https://<host>/api/webhooks/paypal (PAYMENT.CAPTURE.COMPLETED, PAYMENT.CAPTURE.REFUNDED).
+# 6. Upgrade mandate-db off the free 30-day tier before judging ends (Dec 15).
 services:
   - type: web
     name: mandate
@@ -14,6 +21,8 @@ services:
         value: "true"
       - key: PUBLIC_DEMO
         value: "true"
+      - key: VAULT_AUTONOMY_VERIFIED
+        value: "true"
       - key: DAILY_LLM_RUN_LIMIT
         value: "50"
       - key: PAYPAL_ENV
@@ -21,6 +30,8 @@ services:
       - key: PAYPAL_BASE_URL
         value: https://api-m.sandbox.paypal.com
       - key: PUBLIC_BASE_URL
+        sync: false
+      - key: ALLOWED_HOSTS
         sync: false
       - key: PAYPAL_CLIENT_ID
         sync: false

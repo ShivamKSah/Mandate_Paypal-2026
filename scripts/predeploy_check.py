@@ -180,6 +180,20 @@ def evaluate_env(env: Mapping[str, str]) -> list[CheckResult]:
         )
     )
 
+    vault_verified_raw = env.get("VAULT_AUTONOMY_VERIFIED", "").strip().lower()
+    vault_verified_ok = vault_verified_raw in {"", "true", "false"}
+    results.append(
+        CheckResult(
+            "VAULT_AUTONOMY_VERIFIED",
+            vault_verified_ok,
+            (
+                f"configured ({vault_verified_raw or 'default false'})"
+                if vault_verified_ok
+                else "must be 'true' or 'false' when set"
+            ),
+        )
+    )
+
     db_url = env.get("DATABASE_URL", "").strip()
     db_ok = db_url.startswith(("postgres://", "postgresql://", "postgresql+psycopg://"))
     results.append(

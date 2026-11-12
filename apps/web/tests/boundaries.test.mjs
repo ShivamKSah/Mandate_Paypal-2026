@@ -249,7 +249,11 @@ test("vault charge capability requires granted vault status and current authorit
   assert.equal(grantModeLabel(grant), "Buyer approves each purchase");
   assert.equal(paymentActions(reserved, proposal, grant, now).vaultCharge, false);
   const vaulted = MandateSchema.parse({ ...grant, vault_status: "GRANTED" });
-  assert.equal(grantModeLabel(vaulted), "Autonomous (vaulted)");
+  assert.equal(
+    grantModeLabel(vaulted, false),
+    "Autonomous mode (built; not yet verified end to end in the PayPal sandbox)",
+  );
+  assert.equal(grantModeLabel(vaulted, true), "Autonomous (vaulted)");
   assert.equal(paymentActions(reserved, proposal, vaulted, now).vaultCharge, true);
   assert.equal(
     paymentActions(reserved, proposal, { ...vaulted, status: "REVOKED" }, now)

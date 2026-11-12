@@ -11,6 +11,7 @@ export function Payments({
   working,
   action,
   configured,
+  vaultAutonomyVerified = false,
   callbackOrderId,
 }: {
   payments: Payment[];
@@ -20,6 +21,7 @@ export function Payments({
   working: boolean;
   action: Action;
   configured: boolean;
+  vaultAutonomyVerified?: boolean;
   callbackOrderId: string | null;
 }) {
   const byProposal = useMemo(
@@ -79,7 +81,7 @@ export function Payments({
                       .join(", ") ?? "Proposal payment"}
                   </strong>
                   <span>
-                    {pay.status.replaceAll("_", " ")} · {grantModeLabel(grant)} ·{" "}
+                    {pay.status.replaceAll("_", " ")} · {grantModeLabel(grant, vaultAutonomyVerified)} ·{" "}
                     {pay.id.slice(0, 10)} · {date(pay.created_at)}
                   </span>
                   {returnedOrder && (

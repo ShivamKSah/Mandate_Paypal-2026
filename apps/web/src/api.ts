@@ -23,6 +23,7 @@ export const SessionSchema = z.object({
   csrf_token: z.string(),
   mode: z.enum(["sandbox", "unconfigured"]),
   paypal_configured: z.boolean(),
+  vault_autonomy_verified: z.boolean().default(false),
   authenticated: z.boolean(),
   access_required: z.boolean(),
   public_demo: z.boolean().default(false),

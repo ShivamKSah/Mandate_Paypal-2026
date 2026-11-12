@@ -25,6 +25,7 @@ import {
   money,
   parseMoney,
   parseInteger,
+  vaultModeLabel,
   type Action,
   type View,
 } from "./domain";
@@ -45,6 +46,7 @@ export function Overview({
   action,
   createGrant,
   paypalConfigured,
+  vaultAutonomyVerified = false,
 }: {
   grant: Mandate | null;
   mandates: Mandate[];
@@ -60,6 +62,7 @@ export function Overview({
   action: Action;
   createGrant: (body: CreateMandate) => Promise<void>;
   paypalConfigured: boolean;
+  vaultAutonomyVerified?: boolean;
 }) {
   const [budget, setBudget] = useState("500");
   const [cap, setCap] = useState("400");
@@ -246,7 +249,7 @@ export function Overview({
                 </div>
                 <div>
                   <span>Payment mode</span>
-                  <strong>{grantModeLabel(grant)}</strong>
+                  <strong>{grantModeLabel(grant, vaultAutonomyVerified)}</strong>
                 </div>
                 <div>
                   <span>Vault status</span>
@@ -378,7 +381,7 @@ export function Overview({
                     className={`mode-option ${preferredMode === "vault" ? "active" : ""}`}
                     onClick={() => setPreferredMode("vault")}
                   >
-                    Autonomous (vaulted)
+                    {vaultModeLabel(vaultAutonomyVerified)}
                   </button>
                 </div>
               </label>

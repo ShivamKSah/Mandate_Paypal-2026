@@ -1,25 +1,27 @@
 # Mandate
 
-Mandate is a bounded-authority AI shopping and payment-control system built with FastAPI, React, PostgreSQL 17, Alembic, and a PayPal Sandbox execution adapter. A human user sets a time- and budget-capped spending grant, the AI shopping agent (or direct proposal client) submits carts through deterministic `P01`–`P11` policy checks and `cart_hash` binding, approved purchases reserve funds atomically in PostgreSQL, and execution routes through either PayPal Sandbox **Autonomous (vaulted)** setup/charging (`vault_id`, code-complete and tested against mocks) or **Buyer approves each purchase** checkout with a durable outbox, reconciliation worker, and SHA-256 hash-chained audit ledger.
+Mandate is a bounded-authority AI shopping and payment-control system built with FastAPI, React, PostgreSQL 17, Alembic, and a PayPal Sandbox execution adapter. A human user sets a time- and budget-capped spending grant, the AI shopping agent (or direct proposal client) submits carts through deterministic `P01`–`P11` policy checks and `cart_hash` binding, approved purchases reserve funds atomically in PostgreSQL, and execution routes through either PayPal Sandbox **Autonomous (vaulted)** setup/charging (`vault_id`, verified live in PayPal Sandbox on Nov 12, 2026) or **Buyer approves each purchase** checkout with a durable outbox, reconciliation worker, and SHA-256 hash-chained audit ledger.
 
 ## Current Verification Status (Honest Summary)
 
+### Verified by Live Sandbox Run (Nov 12, 2026)
+- **Live PayPal Sandbox end-to-end vault check passed** (`scripts/live_vault_check.py`, no IDs or secrets stored):
+  - Vault grant stored (Fernet-encrypted) and `$1.00` setup authorization auto-refunded.
+  - `$349.00` catalog proposal approved against policy and `cart_hash` binding.
+  - Autonomous `vault-charge` captured (`COMPLETED` confirmed via `PayPal GET /v2/checkout/orders/{id}`).
+  - Partial refund of `$314.10` (`31410` cents) executed through a bounded recovery case.
+  - SHA-256 hash-chained audit ledger verified valid across `10` events.
+
 ### Verified by Automated Offline Tests
-- **186 backend tests passed** (`pytest apps/api/tests -q --tb=short`, loopback-only socket guard `127.0.0.1,::1`, mocked PayPal/Groq HTTP transports, PostgreSQL 17 disposable schemas):
-  - Hypothesis property tests (`@seed(42)`), 15 Break-the-Mandate attack simulations (`0` breaches, `0` payment rows created), Fernet vault grant/charge/reconciliation mocks, `PAYMENT.CAPTURE.REFUNDED` + `PAYMENT.CAPTURE.COMPLETED` webhook signature/authoritative-`GET` mocks, LLM retry/backoff/fallback mocks, instruction constraint extraction (`ESCALATE`-only in `P09`), `PUBLIC_DEMO` isolation/rate-limits, and offline `scripts/predeploy_check.py`.
-- **14 frontend boundary tests passed** (`npm test`), plus TypeScript typecheck (`tsc -b`) and Vite production build (`vite build`).
+- **201 backend tests passed** (`pytest apps/api/tests -q --tb=short`, loopback-only socket guard `127.0.0.1,::1`, mocked PayPal/Groq HTTP transports, PostgreSQL 17 disposable schemas):
+  - Hypothesis property tests (`@seed(42)`), 15 Break-the-Mandate attack simulations (`0` breaches, `0` payment rows created), Fernet vault grant/charge/reconciliation mocks, `PAYMENT.CAPTURE.REFUNDED` + `PAYMENT.CAPTURE.COMPLETED` webhook signature/authoritative-`GET` mocks, LLM retry/backoff/fallback mocks, instruction constraint extraction (`ESCALATE`-only in `P09`), `PUBLIC_DEMO` isolation/rate-limits, offline `scripts/predeploy_check.py`, and `scripts/discover_merchant.py`.
+- **14+ frontend boundary tests passed** (`npm test`), plus TypeScript typecheck (`tsc -b`) and Vite production build (`vite build`).
 - **Synthetic 100-scenario evaluation passed** (`scripts/run_evals.py` -> [eval_results.json](eval_results.json), labeled *Synthetic: scripted scenarios written by the author*): **`8 attack kinds, 50 variants`** with **`50 of 50 blocked (95% CI 92.86-100.0%)`**, **`0 of 50 false positives (95% CI 0.0-7.14%)`**, **`10 of 50 escalated (95% CI 11.24-33.04%)`** on legitimate carts, `p50=0.918 ms`, `p95=1.311 ms`.
 
-### Verified by Live Scripts (Operator Checklists — Fill After Running)
-Automated suites never call live PayPal or GroqCloud. Run these scripts manually with real sandbox credentials in `.env` and fill in your observed results:
-- [ ] **Live LLM smoke check** (`.venv/Scripts/python.exe scripts/check_llm.py`): `<TODO: paste timestamp, model name, and PASS status after running>`
-- [ ] **Live PayPal Sandbox vault grant + autonomous charge + partial refund** (`.venv/Scripts/python.exe scripts/live_vault_check.py`): `<TODO: paste timestamp, masked setup order ID, masked charge order ID, masked capture ID, masked refund ID, and audit verify result after running>`
-- [ ] **Live Render / signed webhook verification** (`PAYMENT.CAPTURE.COMPLETED` and `PAYMENT.CAPTURE.REFUNDED`): `<TODO: paste hosted URL, webhook event verification status, and date after running>`
-
-### Still Unverified in This Workspace
-- Live PayPal Sandbox `$1.00` vault setup + browser approval + `$1.00` auto-refund, live `payment_source.paypal.vault_id` charge, live buyer-present checkout/capture, live partial refund, and live PayPal signed webhook delivery over public HTTPS.
-- Live GroqCloud API tool-calling response against `api.groq.com`.
-- Building and booting the [Dockerfile](Dockerfile) / [render.yaml](render.yaml) container or [compose.production.yaml](compose.production.yaml) against an external managed PostgreSQL instance.
+### Still Unverified in External Environments
+- Signed PayPal webhook delivery (`PAYMENT.CAPTURE.COMPLETED` and `PAYMENT.CAPTURE.REFUNDED`) over a public HTTPS URL.
+- Live hosted Render deployment (`render.yaml`) and Docker Compose execution (`compose.production.yaml`).
+- Live GroqCloud API tool-calling response (`scripts/check_llm.py` — placeholder: `<TODO: run scripts/check_llm.py and paste timestamp/model>`).
 
 ## Demo Defaults and What Is Real vs. Mocked
 

@@ -87,9 +87,17 @@ export function canApproveProposal(
     currentAuthority(proposal, grant, now)
   );
 }
-export function grantModeLabel(grant: Mandate | undefined | null): string {
-  return grant?.vault_status === "GRANTED"
+export function vaultModeLabel(verified: boolean): string {
+  return verified
     ? "Autonomous (vaulted)"
+    : "Autonomous mode (built; not yet verified end to end in the PayPal sandbox)";
+}
+export function grantModeLabel(
+  grant: Mandate | undefined | null,
+  vaultAutonomyVerified = false,
+): string {
+  return grant?.vault_status === "GRANTED"
+    ? vaultModeLabel(vaultAutonomyVerified)
     : "Buyer approves each purchase";
 }
 

@@ -904,3 +904,52 @@ def test_config_detects_stale_os_env_and_inner_outer_env_conflicts(tmp_path, mon
     assert "NEW...999" in diag["inner_outer_conflict"]
     assert "OUT...222" in diag["inner_outer_conflict"]
 
+
+def test_vault_autonomy_verified_flag_only_exposes_label_and_changes_no_behavior_mocked(client, monkeypatch):
+    """[MOCKED] VAULT_AUTONOMY_VERIFIED only changes session metadata for UI labels; grant/charge behavior is identical."""
+    _vault_env(monkeypatch)
+    monkeypatch.setattr("mandate.config.VAULT_AUTONOMY_VERIFIED", False)
+    s_false = client.get("/api/session").json()
+    assert s_false["vault_autonomy_verified"] is False
+
+    monkeypatch.setattr("mandate.config.VAULT_AUTONOMY_VERIFIED", True)
+    s_true = client.get("/api/session").json()
+    assert s_true["vault_autonomy_verified"] is True
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "tok", "token_type": "Bearer", "expires_in": 3600})
+        body = json.loads(request.content.decode()) if request.content else {}
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders":
+            if "vault_id" in body.get("payment_source", {}).get("paypal", {}):
+                return httpx.Response(201, json={
+                    "id": "FLAGVC12345678901",
+                    "status": "COMPLETED",
+                    "purchase_units": [{"payee": {"merchant_id": "MERCHANT123"}, "payments": {"captures": [{"id": "FLAGVCCAP1", "status": "COMPLETED", "amount": {"currency_code": "USD", "value": "349.00"}}]}}],
+                })
+            return httpx.Response(201, json={
+                "id": "FLAGGRANT12345678",
+                "status": "PAYER_ACTION_REQUIRED",
+                "links": [{"rel": "approve", "href": "https://www.sandbox.paypal.com/checkoutnow?token=FLAGGRANT12345678"}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders/FLAGGRANT12345678/capture":
+            return httpx.Response(201, json={
+                "id": "FLAGGRANT12345678",
+                "status": "COMPLETED",
+                "payment_source": {"paypal": {"attributes": {"vault": {"id": "VAULT-FLAG-1", "status": "VAULTED"}}}},
+                "purchase_units": [{"payee": {"merchant_id": "MERCHANT123"}, "payments": {"captures": [{"id": "FLAGCAP1", "status": "COMPLETED"}]}}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/payments/captures/FLAGCAP1/refund":
+            return httpx.Response(201, json={"id": "FLAGREF1", "status": "COMPLETED"})
+        raise AssertionError(f"Unexpected call: {request.method} {request.url.path}")
+
+    _install_mock_paypal(monkeypatch, handler)
+    monkeypatch.setattr("mandate.config.VAULT_AUTONOMY_VERIFIED", False)
+    grant = _create_grant(client)
+    assert client.post(f"/api/mandates/{grant['id']}/grant/init", json={}).status_code == 200
+    assert client.post(f"/api/mandates/{grant['id']}/grant/complete", json={}).status_code == 200
+    proposal = _create_approved_proposal(client, grant["id"], intent="flag-label-only")
+    charge = client.post(f"/api/payments/{proposal['payment_id']}/vault-charge", json={})
+    assert charge.status_code == 200
+    assert charge.json()["status"] == "CAPTURED"
+

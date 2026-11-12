@@ -21,7 +21,8 @@ def session_view(owner):
     return {"id": owner.id, "csrf_token": owner.csrf_token, "authenticated": owner.authenticated,
             "access_required": config.ACCESS_REQUIRED, "public_demo": config.PUBLIC_DEMO,
             "mode": "sandbox" if config.PAYPAL_CONFIGURED else "unconfigured",
-            "paypal_configured": config.PAYPAL_CONFIGURED}
+            "paypal_configured": config.PAYPAL_CONFIGURED,
+            "vault_autonomy_verified": config.VAULT_AUTONOMY_VERIFIED}
 
 
 def _seed_demo_grant(db, owner):
