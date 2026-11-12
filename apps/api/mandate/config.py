@@ -7,7 +7,9 @@ from dotenv import load_dotenv
 load_dotenv(Path.cwd() / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://mandate:mandate@localhost:5432/mandate")
-if DATABASE_URL.startswith("postgresql://"):
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 if not DATABASE_URL.startswith("postgresql+psycopg://"):
     raise RuntimeError("Mandate requires PostgreSQL through psycopg; SQLite is unsupported")
@@ -39,4 +41,5 @@ if PRODUCTION and (not COOKIE_SECURE or _public.scheme != "https" or (not PUBLIC
 ALLOWED_ORIGINS = {PUBLIC_BASE_URL}
 if not PRODUCTION:
     ALLOWED_ORIGINS.update({"http://localhost:5173", "http://127.0.0.1:5173", "http://testserver"})
-ALLOWED_HOSTS = list({_public.hostname, "localhost", "127.0.0.1"} | ({"testserver"} if not PRODUCTION else set()))
+_extra_hosts = {host.strip() for host in os.getenv("ALLOWED_HOSTS", "").split(",") if host.strip()}
+ALLOWED_HOSTS = list({_public.hostname, "localhost", "127.0.0.1"} | _extra_hosts | ({"testserver"} if not PRODUCTION else set()))

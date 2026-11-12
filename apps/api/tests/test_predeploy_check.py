@@ -83,3 +83,33 @@ def test_predeploy_check_flags_missing_and_invalid_production_values(tmp_path: P
     assert "too-short" not in out
     assert "not-a-fernet-key" not in out
     assert "supersecretpass" not in out
+
+
+def test_config_normalizes_render_postgres_scheme_and_allowed_hosts():
+    import os
+    import subprocess
+    import sys
+
+    env = dict(os.environ)
+    env.update(
+        {
+            "APP_ENV": "production",
+            "PUBLIC_DEMO": "true",
+            "COOKIE_SECURE": "true",
+            "PUBLIC_BASE_URL": "https://mandate-render.onrender.com",
+            "ALLOWED_HOSTS": "mandate-render.onrender.com,custom.example.com",
+            "DATABASE_URL": "postgres://user:pass@dpg-123/mandate",
+        }
+    )
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from mandate import config; assert config.DATABASE_URL == 'postgresql+psycopg://user:pass@dpg-123/mandate'; assert 'custom.example.com' in config.ALLOWED_HOSTS; assert 'mandate-render.onrender.com' in config.ALLOWED_HOSTS",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
