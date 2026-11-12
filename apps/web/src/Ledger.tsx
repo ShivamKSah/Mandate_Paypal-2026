@@ -4,11 +4,13 @@ import {
   CircleAlert,
   FileClock,
   ShieldCheck,
+  TableProperties,
   X,
 } from "lucide-react";
 import { type LedgerEntry, type LedgerVerify, type Proposal } from "./api";
 import { date } from "./domain";
 import { Empty, PageTitle } from "./ui";
+import { AgGridLedger } from "./AgGridLedger";
 
 export function Ledger({
   entries,
@@ -19,6 +21,7 @@ export function Ledger({
   verify: LedgerVerify | null;
   proposals?: Proposal[];
 }) {
+  const [viewMode, setViewMode] = useState<"ag-grid" | "classic">("ag-grid");
   const [selectedId, setSelectedId] = useState<string | null>(
     entries[0]?.id ?? null,
   );
@@ -100,37 +103,80 @@ export function Ledger({
         </div>
       </div>
 
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "14px 0 10px", flexWrap: "wrap", gap: "8px" }}>
+        <div style={{ display: "inline-flex", background: "var(--surface-raised)", padding: "3px", borderRadius: "8px", border: "1px solid var(--line)" }}>
+          <button
+            type="button"
+            className={viewMode === "ag-grid" ? "button-dark" : "button-quiet"}
+            style={{ minHeight: "28px", padding: "4px 12px", fontSize: "11px", borderRadius: "6px" }}
+            onClick={() => setViewMode("ag-grid")}
+          >
+            <TableProperties size={13} /> AG Grid Explorer
+          </button>
+          <button
+            type="button"
+            className={viewMode === "classic" ? "button-dark" : "button-quiet"}
+            style={{ minHeight: "28px", padding: "4px 12px", fontSize: "11px", borderRadius: "6px" }}
+            onClick={() => setViewMode("classic")}
+          >
+            Classic Timeline
+          </button>
+        </div>
+        <span
+          style={{
+            fontSize: "11px",
+            color: "var(--accent)",
+            background: "var(--accent-soft)",
+            padding: "3px 8px",
+            borderRadius: "6px",
+            fontWeight: 600,
+          }}
+        >
+          AG Grid Sponsor Showcase
+        </span>
+      </div>
+
       <div className={`ledger-layout ${selected ? "with-drawer" : ""}`}>
         <section className="panel ledger-table">
-          <div className="ledger-table-head">
-            <span>EVENT</span>
-            <span>ENTITY</span>
-            <span>RECORDED</span>
-            <span>CHAIN HASH</span>
-          </div>
-          {entries.length ? (
-            entries.map((row) => (
-              <button
-                type="button"
-                className={`ledger-row-btn ${selected?.id === row.id ? "selected" : ""}`}
-                key={row.id}
-                onClick={() => setSelectedId(row.id)}
-              >
-                <span className="event-title">
-                  <i className="ledger-dot" aria-hidden="true" />
-                  {row.event_type.replaceAll("_", " ")}
-                </span>
-                <code>{row.entity_id}</code>
-                <time>{date(row.created_at)}</time>
-                <code>{row.row_hash.slice(0, 16)}…</code>
-              </button>
-            ))
-          ) : (
-            <Empty
-              icon={<FileClock />}
-              title="Ledger is empty"
-              copy="The first grant or policy decision will establish a verifiable event history."
+          {viewMode === "ag-grid" ? (
+            <AgGridLedger
+              entries={entries}
+              selectedId={selectedId}
+              onSelectId={setSelectedId}
             />
+          ) : (
+            <>
+              <div className="ledger-table-head">
+                <span>EVENT</span>
+                <span>ENTITY</span>
+                <span>RECORDED</span>
+                <span>CHAIN HASH</span>
+              </div>
+              {entries.length ? (
+                entries.map((row) => (
+                  <button
+                    type="button"
+                    className={`ledger-row-btn ${selected?.id === row.id ? "selected" : ""}`}
+                    key={row.id}
+                    onClick={() => setSelectedId(row.id)}
+                  >
+                    <span className="event-title">
+                      <i className="ledger-dot" aria-hidden="true" />
+                      {row.event_type.replaceAll("_", " ")}
+                    </span>
+                    <code>{row.entity_id}</code>
+                    <time>{date(row.created_at)}</time>
+                    <code>{row.row_hash.slice(0, 16)}…</code>
+                  </button>
+                ))
+              ) : (
+                <Empty
+                  icon={<FileClock />}
+                  title="Ledger is empty"
+                  copy="The first grant or policy decision will establish a verifiable event history."
+                />
+              )}
+            </>
           )}
         </section>
 

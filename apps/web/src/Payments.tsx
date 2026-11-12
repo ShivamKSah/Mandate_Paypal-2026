@@ -1,8 +1,10 @@
-import { useMemo } from "react";
-import { ArrowUpRight, CircleAlert, WalletCards } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowUpRight, CircleAlert, TableProperties, WalletCards } from "lucide-react";
 import { api, type Mandate, type Payment, type Proposal } from "./api";
 import { date, grantModeLabel, money, paymentActions, type Action } from "./domain";
 import { PageTitle, Empty } from "./ui";
+import { AgGridPayments } from "./AgGridPayments";
+
 export function Payments({
   payments,
   proposals,
@@ -24,6 +26,7 @@ export function Payments({
   vaultAutonomyVerified?: boolean;
   callbackOrderId: string | null;
 }) {
+  const [viewMode, setViewMode] = useState<"cards" | "ag-grid">("cards");
   const byProposal = useMemo(
     () => new Map(proposals.map((p) => [p.id, p])),
     [proposals],
@@ -47,6 +50,39 @@ export function Payments({
           </div>
         </div>
       )}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "14px 0 10px", flexWrap: "wrap", gap: "8px" }}>
+        <div style={{ display: "inline-flex", background: "var(--surface-raised)", padding: "3px", borderRadius: "8px", border: "1px solid var(--line)" }}>
+          <button
+            type="button"
+            className={viewMode === "cards" ? "button-dark" : "button-quiet"}
+            style={{ minHeight: "28px", padding: "4px 12px", fontSize: "11px", borderRadius: "6px" }}
+            onClick={() => setViewMode("cards")}
+          >
+            Payment Queue
+          </button>
+          <button
+            type="button"
+            className={viewMode === "ag-grid" ? "button-dark" : "button-quiet"}
+            style={{ minHeight: "28px", padding: "4px 12px", fontSize: "11px", borderRadius: "6px" }}
+            onClick={() => setViewMode("ag-grid")}
+          >
+            <TableProperties size={13} /> AG Grid Analytics
+          </button>
+        </div>
+        <span
+          style={{
+            fontSize: "11px",
+            color: "var(--accent)",
+            background: "var(--accent-soft)",
+            padding: "3px 8px",
+            borderRadius: "6px",
+            fontWeight: 600,
+          }}
+        >
+          AG Grid Partner Showcase
+        </span>
+      </div>
+
       <section className="panel payment-panel">
         <div className="panel-heading">
           <div>
@@ -55,7 +91,9 @@ export function Payments({
           </div>
           <span className="count-chip">{payments.length} records</span>
         </div>
-        {payments.length ? (
+        {viewMode === "ag-grid" ? (
+          <AgGridPayments payments={payments} proposals={proposals} />
+        ) : payments.length ? (
           payments.map((pay) => {
             const proposal = byProposal.get(pay.proposal_id);
             const grant = mandates.find(

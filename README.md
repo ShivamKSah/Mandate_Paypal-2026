@@ -80,7 +80,8 @@ flowchart LR
 - **Backend & Persistence**: Python 3.11+, FastAPI, SQLAlchemy, Alembic (`0001`–`0004`), PostgreSQL 17, `cryptography` (Fernet)
 - **Payments**: PayPal Sandbox REST API v2 (Orders, Vault `vault_id`, Refunds, Webhook Signature Verification)
 - **AI (Advisory / Proposal Only)**: GroqCloud (`openai/gpt-oss-20b` with labeled deterministic rules fallback)
-- **Frontend**: React 19, TypeScript 7, Vite 8, Zod, Lucide Icons
+- **Frontend & Data Grids**: React 19, TypeScript 7, Vite 8, **AG Grid** (`ag-grid-react` & `ag-grid-community`, patterned after [`paypaldev/hackathon-paypal-ag-grid-boilerplate`](https://github.com/paypaldev/hackathon-paypal-ag-grid-boilerplate)), Zod, Lucide Icons
+- **Deployment & Cloud (Sponsor)**: Render Blueprint ([render.yaml](render.yaml)) with Docker runtime, pre-deploy migrations, and health checks
 - **Testing & Verification**: `pytest`, `pytest-socket` (loopback-only offline guard), `httpx.MockTransport`, Hypothesis (`@seed(42)`), Node test runner
 - **API & Integration Artifacts**: [docs/mandate.postman_collection.json](docs/mandate.postman_collection.json) (36 endpoints generated from FastAPI OpenAPI) and [examples/guarded_agent.py](examples/guarded_agent.py) (minimal external agent proposal example)
 

@@ -31,6 +31,16 @@ Mandate separates **shopping intent** from **payment authority**. An AI agent ca
   3. **Advisory Refund-Cause Suggestion**: suggests a recovery cause (`POST /api/cases/suggest-cause`) for human review.
 - **Where AI is deliberately kept out**: The LLM **never** approves payments, **never** touches `vault_token_ref` or PayPal credentials, **never** computes prices or refunds, and **never** overrides `P01`–`P11` or `cart_hash` binding.
 
+## Sponsor Technologies Used
+
+- **AG Grid (Official Hackathon Sponsor — Best Use of AG Grid / AG Studio)**:
+  - Patterned after the official [`paypaldev/hackathon-paypal-ag-grid-boilerplate`](https://github.com/paypaldev/hackathon-paypal-ag-grid-boilerplate) reference architecture.
+  - Integrated `ag-grid-react` and `ag-grid-community` into both the **Decision Ledger** (`/ledger`) and **Payments & Reservations** (`/payments`) dashboards.
+  - Delivers an interactive, self-serve financial analytics experience with real-time quick search, multi-column sorting, CSV data export, and dynamic light/dark theming (`ag-theme-quartz` / `ag-theme-quartz-dark`).
+  - Master-detail interaction: clicking any row in the AG Grid ledger seamlessly opens the audit drawer to display the payload and cryptographic SHA-256 P01–P11 invariant check results.
+- **Render (Official Hackathon Sponsor)**:
+  - Complete `render.yaml` infrastructure-as-code Blueprint featuring Docker containerization, health check probes (`/api/health`), automated pre-deploy PostgreSQL migrations, and isolated evaluation sessions (`PUBLIC_DEMO=true`).
+
 ## Challenges
 - **Eliminating silent state drift**: Mapping ambiguous PayPal timeouts/5xx to `UNKNOWN` with held reservations and durable outbox `PayPal-Request-Id` retries required careful row locking so retries never double-charge or leak budget.
 - **Sandbox `PAYEE_NOT_CONSENTED` / `PAYEE_MISMATCH` debugging**: During live sandbox integration, vault setup captures failed with `403 PAYEE_NOT_CONSENTED` because the configured `PAYPAL_MERCHANT_ID` belonged to a different sandbox account than the REST app's owner. Adding redacted PayPal error diagnostics and an unapproved-order `discover_merchant.py` helper pinpointed the exact sandbox business merchant ID (`Q6K...FCY`) and fixed the flow.
