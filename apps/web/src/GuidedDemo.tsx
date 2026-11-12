@@ -11,6 +11,7 @@ import {
   type RecoveryCase,
 } from "./api";
 import type { Action, View } from "./domain";
+import { PageTitle } from "./ui";
 import {
   canRunGuidedRecovery,
   deriveGuidedStepStatus,
@@ -58,7 +59,13 @@ export function GuidedDemo({
   ].filter(Boolean).length;
 
   return (
-    <section className="panel guided-demo-panel" aria-labelledby="guided-demo-title">
+    <>
+      <PageTitle
+        eyebrow="INTERACTIVE WALKTHROUGH"
+        title="Guided demo"
+        detail="Step through grant creation, AI shopping, adversarial blocks, escalation, and bounded recovery."
+      />
+      <section className="panel guided-demo-panel" aria-labelledby="guided-demo-title">
       <div className="panel-heading">
         <div>
           <div className="eyebrow">5-STEP WALKTHROUGH</div>
@@ -269,5 +276,6 @@ export function GuidedDemo({
         </li>
       </ol>
     </section>
+    </>
   );
 }

@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { api } from "./api";
 import {
   Activity,
+  Compass,
   House,
   ArrowUpRight,
   BadgeCheck,
@@ -17,6 +18,7 @@ import { activeGrants, type View } from "./domain";
 import { useDashboard } from "./useDashboard";
 import { Login } from "./Login";
 import { Overview } from "./Overview";
+import { GuidedDemo } from "./GuidedDemo";
 import { Proposals } from "./Proposals";
 import { Challenge } from "./Challenge";
 import { Payments } from "./Payments";
@@ -31,6 +33,7 @@ function checkoutReturn() {
 }
 const iconMap = {
   overview: House,
+  guide: Compass,
   proposals: ShoppingBag,
   challenge: ShieldAlert,
   payments: WalletCards,
@@ -39,6 +42,7 @@ const iconMap = {
 } satisfies Record<View, typeof Activity>;
 const views: { id: View; label: string }[] = [
   { id: "overview", label: "Overview" },
+  { id: "guide", label: "Guide" },
   { id: "proposals", label: "Proposals" },
   { id: "challenge", label: "Challenge" },
   { id: "payments", label: "Payments" },
@@ -354,6 +358,21 @@ export default function App() {
               }}
               paypalConfigured={Boolean(session?.paypal_configured)}
               vaultAutonomyVerified={Boolean(session?.vault_autonomy_verified)}
+            />
+          )}
+          {view === "guide" && (
+            <GuidedDemo
+              grant={currentGrant}
+              proposals={proposals}
+              payments={payments}
+              cases={cases}
+              paypalConfigured={Boolean(session?.paypal_configured)}
+              working={working}
+              action={action}
+              createGrant={async (body) => {
+                const created = await api.createMandate(body);
+                setSelectedGrantId(created.id);
+              }}
               onAgentResult={(res) =>
                 setAgentFallbackRun(
                   res.llm_fallback
@@ -365,6 +384,7 @@ export default function App() {
                     : null,
                 )
               }
+              setView={setView}
             />
           )}
           {view === "proposals" && (

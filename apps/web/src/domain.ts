@@ -1,6 +1,7 @@
 import type { Mandate, Payment, Proposal, RecoveryCase } from "./api.ts";
 export type View =
   | "overview"
+  | "guide"
   | "proposals"
   | "challenge"
   | "payments"
