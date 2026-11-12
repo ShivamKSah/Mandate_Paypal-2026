@@ -108,13 +108,16 @@ flowchart LR
 
 ## Current Verification Status (Honest Summary)
 
-### Verified by Live Sandbox Run (Nov 12, 2026)
+### Verified by Live Runs (Nov 12, 2026)
 - **Live PayPal Sandbox end-to-end vault check passed** (`scripts/live_vault_check.py`, no IDs or secrets stored):
   - Vault grant stored (Fernet-encrypted) and `$1.00` setup authorization auto-refunded.
   - `$349.00` catalog proposal approved against policy and `cart_hash` binding.
   - Autonomous `vault-charge` captured (`COMPLETED` confirmed via `PayPal GET /v2/checkout/orders/{id}`).
   - Partial refund of `$314.10` (`31410` cents) executed through a bounded recovery case.
   - SHA-256 hash-chained audit ledger verified valid across `10` events.
+- **Live Channel3 product search check passed** (`scripts/check_channel3.py`):
+  - Live search verified Nov 12, 2026 (one query, 200 OK, returned 1 product).
+  - Channel3 products from merchants outside the grant allowlist remain strictly denied by `P04`.
 
 ### Verified by Automated Offline Tests
 - **211 backend tests passed** (`pytest apps/api/tests -q --tb=short`, loopback-only socket guard `127.0.0.1,::1`, mocked PayPal/Groq HTTP transports, PostgreSQL 17 disposable schemas):
@@ -126,7 +129,6 @@ flowchart LR
 - Signed PayPal webhook delivery (`PAYMENT.CAPTURE.COMPLETED` and `PAYMENT.CAPTURE.REFUNDED`) over a public HTTPS URL.
 - Live hosted Render deployment (`render.yaml`) and Docker Compose execution (`compose.production.yaml`).
 - Live GroqCloud API tool-calling response (`scripts/check_llm.py` — placeholder: `<TODO: run scripts/check_llm.py and paste timestamp/model>`).
-- Live Channel3 API product search response (`scripts/check_channel3.py` — operator-run check with optional key).
 
 ## Demo Defaults and What Is Real vs. Mocked
 
@@ -244,7 +246,7 @@ Mandate includes 15 automated attack simulations in [apps/api/mandate/attacks.py
 │   │   │   ├── zapier.py        # Non-blocking Zapier webhook dispatcher
 │   │   │   ├── agents/          # Groq LLM tool-calling shopping agent & fallback
 │   │   │   └── payments/        # PayPal REST API v2 client (Orders, Vault, Refunds)
-│   │   └── tests/               # 210 offline backend tests (Hypothesis, socket guard)
+│   │   └── tests/               # 211 offline backend tests (Hypothesis, socket guard)
 │   └── web/                     # React 19 + TypeScript frontend dashboard
 │       ├── src/
 │       │   ├── Overview.tsx     # Grant management & Vault setup screen
@@ -276,7 +278,7 @@ Mandate includes 15 automated attack simulations in [apps/api/mandate/attacks.py
 | **Render** | Infrastructure-as-code Blueprint in [`render.yaml`](render.yaml) building Docker runtime with PostgreSQL, pre-deploy migrations, and health checks. | Blueprint ready; hosted URL pending deployment |
 | **Postman** | OpenAPI-derived 36-endpoint collection in [`docs/mandate.postman_collection.json`](docs/mandate.postman_collection.json) covering all REST routes and schemas. | Collection committed in repo; not published to Postman Network |
 | **Zapier** | Background webhook dispatcher ([`apps/api/mandate/zapier.py`](apps/api/mandate/zapier.py)) emitting events on policy evaluations, captures, and refunds. Test endpoint at `POST /api/integrations/zapier/test`. | Built & optional; active when `ZAPIER_WEBHOOK_URL` is set in `.env` |
-| **Channel3** | E-commerce product search adapter ([`apps/api/mandate/channel3.py`](apps/api/mandate/channel3.py)) implementing POST `https://api.trychannel3.com/v1/search` with `x-api-key`. When `CHANNEL3_API_KEY` is not set, uses curated fallback items. Items are strictly bounded by Mandate's merchant allowlist (`P04`) and budget limits. Default guided demo uses trusted local catalog. | Built & optional adapter with [MOCKED] tests; live API search is unverified |
+| **Channel3** | E-commerce product search adapter ([`apps/api/mandate/channel3.py`](apps/api/mandate/channel3.py)) implementing POST `https://api.trychannel3.com/v1/search` with `x-api-key`. When `CHANNEL3_API_KEY` is not set, uses curated fallback items. Items are strictly bounded by Mandate's merchant allowlist (`P04`) and budget limits. Default guided demo uses trusted local catalog. | Built & optional adapter; live search verified Nov 12, 2026 (one query, 200 OK); non-allowlisted merchants denied by P04 |
 
 ## Tools Used
 
