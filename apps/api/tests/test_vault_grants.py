@@ -49,6 +49,7 @@ def _vault_env(monkeypatch):
     monkeypatch.setenv("PAYPAL_MERCHANT_ID", "MERCHANT123")
     monkeypatch.setenv("VAULT_ENCRYPTION_KEY", Fernet.generate_key().decode())
     monkeypatch.setattr("mandate.resources.PUBLIC_BASE_URL", "https://example.test")
+    monkeypatch.setattr("mandate.payments_api.PUBLIC_BASE_URL", "https://example.test")
 
 
 def _install_mock_paypal(monkeypatch, handler):
@@ -401,4 +402,323 @@ def test_vault_grant_requires_encryption_key_and_csrf_ownership_mocked(client, m
     with TestClient(app) as other:
         other.headers["X-CSRF-Token"] = other.get("/api/session").json()["csrf_token"]
         assert other.post(f"/api/mandates/{grant['id']}/grant/init", json={}).status_code == 404
+
+
+def test_grant_complete_order_not_approved_audits_and_redacts_mocked(client, database, monkeypatch):
+    """[MOCKED] ORDER_NOT_APPROVED on grant/complete keeps 502 with redacted PayPal metadata and GRANT_FAILED reason."""
+    _vault_env(monkeypatch)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "tok", "token_type": "Bearer", "expires_in": 3600})
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders":
+            return httpx.Response(201, json={
+                "id": "UNAPPROVEDORDER12",
+                "status": "PAYER_ACTION_REQUIRED",
+                "links": [{"rel": "approve", "href": "https://www.sandbox.paypal.com/checkoutnow?token=UNAPPROVEDORDER12"}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders/UNAPPROVEDORDER12/capture":
+            return httpx.Response(422, json={
+                "name": "UNPROCESSABLE_ENTITY",
+                "debug_id": "DBG-NOTAPP-001",
+                "message": "secret payer session details",
+                "details": [{"issue": "ORDER_NOT_APPROVED", "description": "Payer has not yet approved the Order"}],
+            })
+        raise AssertionError(f"Unexpected call: {request.method} {request.url.path}")
+
+    _install_mock_paypal(monkeypatch, handler)
+    grant = _create_grant(client)
+    assert client.post(f"/api/mandates/{grant['id']}/grant/init", json={}).status_code == 200
+
+    res = client.post(f"/api/mandates/{grant['id']}/grant/complete", json={})
+    assert res.status_code == 502
+    detail = res.json()["detail"]
+    assert "status=422" in detail
+    assert "name=UNPROCESSABLE_ENTITY" in detail
+    assert "issues=ORDER_NOT_APPROVED" in detail
+    assert "debug_id=DBG-NOTAPP-001" in detail
+    assert "secret payer session details" not in res.text
+
+    with database() as db:
+        row = db.get(Mandate, grant["id"])
+        assert row.vault_status == "FAILED"
+        failed = db.scalars(select(AuditEvent).where(AuditEvent.event_type == "GRANT_FAILED")).all()[-1]
+        assert failed.details["phase"] == "capture"
+        assert failed.details["reason"] == "ORDER_NOT_APPROVED"
+        assert failed.details["provider_status"] == 422
+        assert failed.details["provider_error"] == "UNPROCESSABLE_ENTITY"
+        assert failed.details["provider_issues"] == ["ORDER_NOT_APPROVED"]
+        assert failed.details["provider_debug_id"] == "DBG-NOTAPP-001"
+
+
+def test_grant_complete_and_vault_charge_payee_mismatch_mocked(client, database, monkeypatch):
+    """[MOCKED] Payee merchant mismatch rejects grant/complete and retains UNKNOWN reservation on vault-charge."""
+    _vault_env(monkeypatch)
+    raw_vault_id = "VAULT-PAYEE-9988"
+
+    def grant_mismatch_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "tok", "token_type": "Bearer", "expires_in": 3600})
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders":
+            return httpx.Response(201, json={
+                "id": "PAYEEMISMATCH1234",
+                "status": "PAYER_ACTION_REQUIRED",
+                "links": [{"rel": "approve", "href": "https://www.sandbox.paypal.com/checkoutnow?token=PAYEEMISMATCH1234"}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders/PAYEEMISMATCH1234/capture":
+            return httpx.Response(201, json={
+                "id": "PAYEEMISMATCH1234",
+                "status": "COMPLETED",
+                "payment_source": {"paypal": {"attributes": {"vault": {"id": raw_vault_id, "status": "VAULTED"}}}},
+                "purchase_units": [{"payee": {"merchant_id": "ATTACKER999"}, "payments": {"captures": [{"id": "CAP999", "status": "COMPLETED"}]}}],
+            })
+        raise AssertionError(f"Unexpected call: {request.method} {request.url.path}")
+
+    _install_mock_paypal(monkeypatch, grant_mismatch_handler)
+    g1 = _create_grant(client)
+    assert client.post(f"/api/mandates/{g1['id']}/grant/init", json={}).status_code == 200
+    bad_comp = client.post(f"/api/mandates/{g1['id']}/grant/complete", json={})
+    assert bad_comp.status_code == 502
+    assert "PAYEE_MISMATCH" in bad_comp.json()["detail"]
+    assert raw_vault_id not in bad_comp.text
+    with database() as db:
+        row = db.get(Mandate, g1["id"])
+        assert row.vault_status == "FAILED"
+        assert row.vault_token_ref is None
+        ev = db.scalars(select(AuditEvent).where(AuditEvent.event_type == "GRANT_FAILED", AuditEvent.entity_id == g1["id"])).first()
+        assert ev.details["reason"] == "payee_mismatch"
+        assert ev.details["code"] == "PAYEE_MISMATCH"
+
+    def charge_mismatch_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "tok", "token_type": "Bearer", "expires_in": 3600})
+        body = json.loads(request.content.decode()) if request.content else {}
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders":
+            if "vault_id" in body.get("payment_source", {}).get("paypal", {}):
+                return httpx.Response(201, json={
+                    "id": "VCMISMATCH1234567",
+                    "status": "COMPLETED",
+                    "purchase_units": [{
+                        "payee": {"merchant_id": "WRONGMERCHANT"},
+                        "payments": {"captures": [{"id": "VCCAP999", "status": "COMPLETED", "amount": {"currency_code": "USD", "value": "349.00"}}]},
+                    }],
+                })
+            return httpx.Response(201, json={
+                "id": "GOODGRANT12345678",
+                "status": "PAYER_ACTION_REQUIRED",
+                "links": [{"rel": "approve", "href": "https://www.sandbox.paypal.com/checkoutnow?token=GOODGRANT12345678"}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders/GOODGRANT12345678/capture":
+            return httpx.Response(201, json={
+                "id": "GOODGRANT12345678",
+                "status": "COMPLETED",
+                "payment_source": {"paypal": {"attributes": {"vault": {"id": raw_vault_id, "status": "VAULTED"}}}},
+                "purchase_units": [{"payee": {"merchant_id": "MERCHANT123"}, "payments": {"captures": [{"id": "GOODCAP1", "status": "COMPLETED"}]}}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/payments/captures/GOODCAP1/refund":
+            return httpx.Response(201, json={"id": "GOODREF1", "status": "COMPLETED"})
+        raise AssertionError(f"Unexpected call: {request.method} {request.url.path}")
+
+    _install_mock_paypal(monkeypatch, charge_mismatch_handler)
+    g2 = _create_grant(client)
+    assert client.post(f"/api/mandates/{g2['id']}/grant/init", json={}).status_code == 200
+    assert client.post(f"/api/mandates/{g2['id']}/grant/complete", json={}).status_code == 200
+    proposal = _create_approved_proposal(client, g2["id"], intent="vc-payee-mismatch")
+
+    vc_res = client.post(f"/api/payments/{proposal['payment_id']}/vault-charge", json={})
+    assert vc_res.status_code == 502
+    assert "PAYEE_MISMATCH" in vc_res.json()["detail"]
+    assert raw_vault_id not in vc_res.text
+
+    updated = client.get(f"/api/mandates/{g2['id']}").json()
+    assert updated["reserved_cents"] == 34900
+    assert updated["spent_cents"] == 0
+    payment = next(p for p in client.get("/api/payments").json() if p["id"] == proposal["payment_id"])
+    assert payment["status"] == "UNKNOWN"
+
+
+def test_grant_complete_missing_vault_id_after_poll_audits_reason_mocked(client, database, monkeypatch):
+    """[MOCKED] Missing vault ID after GET polls returns 409 and records specific GRANT_FAILED vault_lookup reason."""
+    _vault_env(monkeypatch)
+    poll_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal poll_count
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "tok", "token_type": "Bearer", "expires_in": 3600})
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders":
+            return httpx.Response(201, json={
+                "id": "NOVALUTIDORDER123",
+                "status": "PAYER_ACTION_REQUIRED",
+                "links": [{"rel": "approve", "href": "https://www.sandbox.paypal.com/checkoutnow?token=NOVALUTIDORDER123"}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders/NOVALUTIDORDER123/capture":
+            return httpx.Response(201, json={
+                "id": "NOVALUTIDORDER123",
+                "status": "COMPLETED",
+                "purchase_units": [{"payee": {"merchant_id": "MERCHANT123"}, "payments": {"captures": [{"id": "NOCAP1", "status": "COMPLETED"}]}}],
+            })
+        if request.method == "GET" and request.url.path == "/v2/checkout/orders/NOVALUTIDORDER123":
+            poll_count += 1
+            return httpx.Response(200, json={"id": "NOVALUTIDORDER123", "status": "COMPLETED"})
+        raise AssertionError(f"Unexpected call: {request.method} {request.url.path}")
+
+    _install_mock_paypal(monkeypatch, handler)
+    grant = _create_grant(client)
+    assert client.post(f"/api/mandates/{grant['id']}/grant/init", json={}).status_code == 200
+    comp = client.post(f"/api/mandates/{grant['id']}/grant/complete", json={})
+    assert comp.status_code == 409
+    assert poll_count == 3
+    assert "vault_token_missing" in comp.json()["detail"]
+
+    with database() as db:
+        ev = db.scalars(select(AuditEvent).where(AuditEvent.event_type == "GRANT_FAILED", AuditEvent.entity_id == grant["id"])).first()
+        assert ev.details["phase"] == "vault_lookup"
+        assert ev.details["reason"] == "vault_token_missing"
+        assert ev.details["vault_state"] == "MISSING"
+        assert ev.details["poll_attempts"] == 3
+
+
+def test_paypal_500_returns_and_audits_redacted_details_across_endpoints_mocked(client, database, monkeypatch):
+    """[MOCKED] PayPal 500 across grant/init, grant/complete, checkout, capture, and vault-charge preserves status + redacted metadata."""
+    _vault_env(monkeypatch)
+    raw_vault_id = "VAULT-500-SECRET-123"
+    mode = {"fail_500": True, "allow_checkout_order": False}
+
+    def err_500():
+        return httpx.Response(500, json={
+            "name": "INTERNAL_SERVER_ERROR",
+            "debug_id": "DBG-500-TRACE",
+            "message": "top-secret-upstream-stack-client-secret",
+            "details": [{"issue": "INTERNAL_ERROR"}],
+        })
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "tok", "token_type": "Bearer", "expires_in": 3600})
+        body = json.loads(request.content.decode()) if request.content else {}
+        if request.method == "POST" and request.url.path == "/v2/checkout/orders":
+            if mode["fail_500"]:
+                return err_500()
+            if "vault_id" in body.get("payment_source", {}).get("paypal", {}):
+                return err_500()
+            order_id = "CHK500ORDER123456" if mode["allow_checkout_order"] else "GRANT500ORDER1234"
+            return httpx.Response(201, json={
+                "id": order_id,
+                "status": "PAYER_ACTION_REQUIRED",
+                "links": [{"rel": "approve", "href": f"https://www.sandbox.paypal.com/checkoutnow?token={order_id}"}],
+            })
+        if request.method == "POST" and request.url.path.endswith("/capture"):
+            if mode["fail_500"]:
+                return err_500()
+            return httpx.Response(201, json={
+                "id": "GRANT500ORDER1234",
+                "status": "COMPLETED",
+                "payment_source": {"paypal": {"attributes": {"vault": {"id": raw_vault_id, "status": "VAULTED"}}}},
+                "purchase_units": [{"payments": {"captures": [{"id": "GRANT500CAP1", "status": "COMPLETED"}]}}],
+            })
+        if request.method == "POST" and request.url.path == "/v2/payments/captures/GRANT500CAP1/refund":
+            return httpx.Response(201, json={"id": "GRANT500REF1", "status": "COMPLETED"})
+        raise AssertionError(f"Unexpected call: {request.method} {request.url.path}")
+
+    _install_mock_paypal(monkeypatch, handler)
+    grant = _create_grant(client)
+
+    # 1. grant/init 500
+    r_init = client.post(f"/api/mandates/{grant['id']}/grant/init", json={})
+    assert r_init.status_code == 502
+    for marker in ("status=500", "name=INTERNAL_SERVER_ERROR", "issues=INTERNAL_ERROR", "debug_id=DBG-500-TRACE"):
+        assert marker in r_init.json()["detail"]
+    assert "top-secret-upstream" not in r_init.text
+
+    # 2. grant/init succeeds, grant/complete hits 500
+    mode["fail_500"] = False
+    assert client.post(f"/api/mandates/{grant['id']}/grant/init", json={}).status_code == 200
+    mode["fail_500"] = True
+    r_comp = client.post(f"/api/mandates/{grant['id']}/grant/complete", json={})
+    assert r_comp.status_code == 502
+    assert "debug_id=DBG-500-TRACE" in r_comp.json()["detail"]
+    assert "name=INTERNAL_SERVER_ERROR" in r_comp.json()["detail"]
+    assert "top-secret-upstream" not in r_comp.text
+
+    # 3. checkout hits 500
+    p_chk = _create_approved_proposal(client, grant["id"], intent="chk-500")
+    r_chk = client.post(f"/api/payments/{p_chk['payment_id']}/checkout")
+    assert r_chk.status_code == 502
+    assert "debug_id=DBG-500-TRACE" in r_chk.json()["detail"]
+
+    # 4. capture hits 500
+    mode["fail_500"] = False
+    mode["allow_checkout_order"] = True
+    g_cap = _create_grant(client)
+    p_cap = _create_approved_proposal(client, g_cap["id"], intent="cap-500")
+    assert client.post(f"/api/payments/{p_cap['payment_id']}/checkout").status_code == 200
+    mode["fail_500"] = True
+    r_cap = client.post(f"/api/payments/{p_cap['payment_id']}/capture")
+    assert r_cap.status_code == 502
+    assert "debug_id=DBG-500-TRACE" in r_cap.json()["detail"]
+
+    # 5. grant completes, vault-charge hits 500
+    mode["fail_500"] = False
+    mode["allow_checkout_order"] = False
+    g_vc = _create_grant(client)
+    assert client.post(f"/api/mandates/{g_vc['id']}/grant/init", json={}).status_code == 200
+    assert client.post(f"/api/mandates/{g_vc['id']}/grant/complete", json={}).status_code == 200
+    p_vc = _create_approved_proposal(client, g_vc["id"], intent="vc-500")
+    r_vc = client.post(f"/api/payments/{p_vc['payment_id']}/vault-charge")
+    assert r_vc.status_code == 502
+    assert "status=500" in r_vc.json()["detail"]
+    assert "name=INTERNAL_SERVER_ERROR" in r_vc.json()["detail"]
+    assert "issues=INTERNAL_ERROR" in r_vc.json()["detail"]
+    assert "debug_id=DBG-500-TRACE" in r_vc.json()["detail"]
+    assert raw_vault_id not in r_vc.text
+
+    with database() as db:
+        grant_failures = db.scalars(select(AuditEvent).where(AuditEvent.event_type == "GRANT_FAILED")).all()
+        assert len(grant_failures) == 2
+        assert {ev.details["phase"] for ev in grant_failures} == {"init", "capture"}
+        for ev in grant_failures:
+            assert ev.details["provider_status"] == 500
+            assert ev.details["provider_error"] == "INTERNAL_SERVER_ERROR"
+            assert ev.details["provider_issues"] == ["INTERNAL_ERROR"]
+            assert ev.details["provider_debug_id"] == "DBG-500-TRACE"
+        op_failures = db.scalars(select(AuditEvent).where(AuditEvent.event_type == "PROVIDER_OPERATION_UNRESOLVED")).all()
+        assert len(op_failures) == 3
+        for ev in op_failures:
+            assert ev.details["provider_status"] == 500
+            assert ev.details["provider_error"] == "INTERNAL_SERVER_ERROR"
+            assert ev.details["provider_issues"] == ["INTERNAL_ERROR"]
+            assert ev.details["provider_debug_id"] == "DBG-500-TRACE"
+            assert raw_vault_id not in json.dumps(ev.details)
+
+
+def test_live_vault_check_http_error_reporting_prints_redacted_detail(capsys):
+    """Verify scripts/live_vault_check.check_response prints status, detail, and likely cause on HTTP error."""
+    import importlib.util
+    from pathlib import Path
+
+    script_path = Path(__file__).resolve().parents[3] / "scripts" / "live_vault_check.py"
+    spec = importlib.util.spec_from_file_location("live_vault_check", script_path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    class FakeResponse:
+        status_code = 502
+        is_success = False
+        text = ""
+
+        def json(self):
+            return {
+                "detail": "Approve this order in PayPal before capturing [code=PROVIDER_REJECTED, status=422, name=UNPROCESSABLE_ENTITY, issues=ORDER_NOT_APPROVED, debug_id=DBG-422]"
+            }
+
+    with pytest.raises(SystemExit) as exc:
+        mod.check_response(FakeResponse(), "POST /api/mandates/****/grant/complete")
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "HTTP 502" in err
+    assert "ORDER_NOT_APPROVED" in err
+    assert "DBG-422" in err
+    assert "Likely cause:" in err
 

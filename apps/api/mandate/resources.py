@@ -1,4 +1,5 @@
 import asyncio
+import os
 from datetime import timedelta
 import hashlib
 from uuid import uuid4
@@ -11,7 +12,7 @@ from .audit import append, event_payload, verify
 from .config import PUBLIC_BASE_URL
 from .db import get_db
 from .models import AuditEvent, Mandate, Operation, Payment, Proposal, now
-from .payments.paypal import PayPalClient, PayPalError
+from .payments.paypal import PayPalClient, PayPalError, error_diagnostic_fields, provider_failure_message
 from .schemas import GrantCompleteInput, MandateInput
 from .security import human, owned
 from .settlement import approval_link
@@ -56,6 +57,15 @@ def _extract_capture_id(payload):
                 if isinstance(capture, dict) and isinstance(capture.get("id"), str) and capture["id"]:
                     return capture["id"]
     return None
+
+
+def _setup_payee_mismatch(payload):
+    expected = os.getenv("PAYPAL_MERCHANT_ID")
+    units = payload.get("purchase_units") if isinstance(payload, dict) else None
+    if not expected or not isinstance(units, list) or not units or not isinstance(units[0], dict):
+        return False
+    payee = units[0].get("payee")
+    return isinstance(payee, dict) and payee.get("merchant_id") != expected
 
 
 @router.post("/mandates")
@@ -117,8 +127,21 @@ async def grant_init(mandate_id: str, owner=Depends(human), db: DBSession = Depe
         cancel_url = PUBLIC_BASE_URL + "/?grant=cancelled"
         try:
             result = await client.create_vault_setup_order(grant.id, request_id, return_url, cancel_url)
-        except PayPalError:
-            raise HTTPException(502, "PayPal vault setup failed; verify sandbox configuration and try again") from None
+        except PayPalError as error:
+            append(db, owner, "GRANT_FAILED", grant.id, {
+                "phase": "init",
+                "code": error.code,
+                "reason": error.issue or error.error_name or error.code,
+                **error_diagnostic_fields(error),
+            })
+            db.commit()
+            raise HTTPException(
+                502,
+                provider_failure_message(
+                    error,
+                    "PayPal vault setup failed; verify sandbox configuration and try again",
+                ),
+            ) from None
         link = approval_link(result)
         order_id = result.get("id")
         if not isinstance(order_id, str) or not order_id or not link:
@@ -156,28 +179,87 @@ async def grant_complete(
             result = await client.capture_order(order_id, cap_req)
         except PayPalError as error:
             grant.vault_status = "FAILED"
-            append(db, owner, "GRANT_FAILED", grant.id, {"order_id": mask_token(order_id), "code": error.code})
+            append(db, owner, "GRANT_FAILED", grant.id, {
+                "order_id": mask_token(order_id),
+                "phase": "capture",
+                "code": error.code,
+                "reason": error.issue or error.error_name or error.code,
+                **error_diagnostic_fields(error),
+            })
             db.commit()
-            raise HTTPException(502, "Could not capture the $1.00 vault setup order; confirm buyer approval in PayPal") from None
+            raise HTTPException(
+                502,
+                provider_failure_message(
+                    error,
+                    "Could not capture the $1.00 vault setup order; confirm buyer approval in PayPal",
+                ),
+            ) from None
+        if _setup_payee_mismatch(result):
+            grant.vault_status = "FAILED"
+            err = PayPalError("Vault setup order payee mismatch", code="PAYEE_MISMATCH")
+            append(db, owner, "GRANT_FAILED", grant.id, {
+                "order_id": mask_token(order_id),
+                "phase": "payee_verification",
+                "code": err.code,
+                "reason": "payee_mismatch",
+            })
+            db.commit()
+            raise HTTPException(
+                502,
+                provider_failure_message(err, "Vault setup order payee does not match configured PAYPAL_MERCHANT_ID"),
+            )
         vault_id, vault_state = _extract_vault_info(result)
         capture_id = _extract_capture_id(result)
+        poll_attempts = 0
+        last_poll_error: PayPalError | None = None
         for delay in (0.5, 1.0, 2.0):
             if vault_id and vault_state not in {"PENDING"}:
                 break
             await asyncio.sleep(delay)
+            poll_attempts += 1
             try:
                 polled = await client.get_order(order_id)
-            except PayPalError:
+            except PayPalError as error:
+                last_poll_error = error
                 continue
+            if _setup_payee_mismatch(polled):
+                grant.vault_status = "FAILED"
+                err = PayPalError("Vault setup order payee mismatch", code="PAYEE_MISMATCH")
+                append(db, owner, "GRANT_FAILED", grant.id, {
+                    "order_id": mask_token(order_id),
+                    "phase": "payee_verification",
+                    "code": err.code,
+                    "reason": "payee_mismatch",
+                })
+                db.commit()
+                raise HTTPException(
+                    502,
+                    provider_failure_message(err, "Vault setup order payee does not match configured PAYPAL_MERCHANT_ID"),
+                )
             polled_id, polled_state = _extract_vault_info(polled)
             if polled_id:
                 vault_id, vault_state = polled_id, polled_state
             capture_id = capture_id or _extract_capture_id(polled)
         if not vault_id or vault_state in {"PENDING", "FAILED"}:
             grant.vault_status = "FAILED"
-            append(db, owner, "GRANT_FAILED", grant.id, {"order_id": mask_token(order_id), "reason": "vault_token_unavailable"})
+            reason = (
+                "vault_token_failed" if vault_state == "FAILED"
+                else "vault_token_pending_after_poll" if vault_state == "PENDING"
+                else "vault_token_missing"
+            )
+            audit_details = {
+                "order_id": mask_token(order_id),
+                "phase": "vault_lookup",
+                "reason": reason,
+                "vault_state": vault_state or "MISSING",
+                "poll_attempts": poll_attempts,
+            }
+            if last_poll_error is not None:
+                audit_details["poll_code"] = last_poll_error.code
+                audit_details.update(error_diagnostic_fields(last_poll_error))
+            append(db, owner, "GRANT_FAILED", grant.id, audit_details)
             db.commit()
-            raise HTTPException(409, "PayPal did not return an active vault token for this order")
+            raise HTTPException(409, f"PayPal did not return an active vault token for this order (reason={reason}, state={vault_state or 'MISSING'})")
         try:
             grant.vault_token_ref = encrypt_vault_token(vault_id)
         except VaultConfigError as exc:

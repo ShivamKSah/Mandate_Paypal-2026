@@ -10,7 +10,7 @@ from .catalog import quote
 from .config import PUBLIC_BASE_URL
 from .db import get_db
 from .models import Mandate, Operation, Payment, Proposal, ReconciliationLease, Session, now
-from .payments.paypal import PayPalClient, PayPalError
+from .payments.paypal import PayPalClient, PayPalError, error_diagnostic_fields, provider_failure_message
 from .policy import evaluate
 from .security import human, owned
 from .schemas import ItemInput
@@ -106,19 +106,17 @@ def save_failure(db, owner, operation_id, payment_id, error, result=None):
             payment.provider_order_id = result["id"]
     append(db, owner, "PROVIDER_OPERATION_UNRESOLVED" if ambiguous else "PROVIDER_OPERATION_FAILED", payment.id,
            {"operation_id": operation.id, "kind": operation.kind, "code": error.code,
-            "provider_status": error.status_code, "provider_issue": error.issue, "reservation_retained": True})
+            "reservation_retained": True, **error_diagnostic_fields(error)})
     db.commit()
 
 
-def provider_failure_message(error, fallback):
-    if not error.ambiguous:
-        if error.issue == "ORDER_NOT_APPROVED":
-            return "Approve this order in PayPal before capturing; the reservation is retained"
-        if error.issue == "INSTRUMENT_DECLINED":
-            return "PayPal declined the funding source; return to PayPal and choose another payment method"
-        if error.status_code in {401, 403}:
-            return "PayPal rejected the application credentials or merchant permissions; check the sandbox configuration"
-    return fallback
+def _payee_mismatch(result):
+    expected = os.getenv("PAYPAL_MERCHANT_ID")
+    units = result.get("purchase_units") if isinstance(result, dict) else None
+    if not expected or not isinstance(units, list) or len(units) != 1 or not isinstance(units[0], dict):
+        return False
+    payee = units[0].get("payee")
+    return isinstance(payee, dict) and payee.get("merchant_id") != expected
 
 
 @router.get("")
@@ -161,6 +159,8 @@ async def checkout(payment_id: str, owner=Depends(human), db: DBSession = Depend
         try:
             result = await client.create_order(payload["cart"], request_id, payload["return_url"], payload["cancel_url"])
             if not settle_order(db, operation_id, result):
+                if _payee_mismatch(result):
+                    raise PayPalError("Payee mismatch on created order", code="PAYEE_MISMATCH", ambiguous=True)
                 raise PayPalError("Order response needs reconciliation", code="INVALID_ORDER_RESPONSE", ambiguous=True)
         except PayPalError as error:
             save_failure(db, owner, operation_id, payment_id, error, result)
@@ -190,6 +190,8 @@ async def capture(payment_id: str, owner=Depends(human), db: DBSession = Depends
             result = await client.capture_order(order_id, request_id)
             confirmed = capture_from_order(result, payment)
             if confirmed is None:
+                if _payee_mismatch(result):
+                    raise PayPalError("Payee mismatch on captured order", code="PAYEE_MISMATCH", ambiguous=True)
                 raise PayPalError("Capture requires reconciliation", code="UNCONFIRMED_CAPTURE", ambiguous=True)
         except PayPalError as error:
             save_failure(db, owner, operation_id, payment_id, error, result)
@@ -233,6 +235,8 @@ async def vault_charge(payment_id: str, owner=Depends(human), db: DBSession = De
             payment.provider_order_id = order_id
             db.flush()
             if capture_from_order(result, payment) is None or not settle_capture(db, payment_id, result):
+                if _payee_mismatch(result):
+                    raise PayPalError("Payee mismatch on vaulted order", code="PAYEE_MISMATCH", ambiguous=True)
                 raise PayPalError("Vault charge capture requires reconciliation", code="UNCONFIRMED_CAPTURE", ambiguous=True)
             op = db.get(Operation, operation_id)
             op.status, op.result = "COMPLETED", {"id": order_id, "status": "COMPLETED"}

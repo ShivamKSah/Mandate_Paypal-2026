@@ -29,6 +29,15 @@ def missing_environment(environ: Mapping[str, str] | None = None) -> list[str]:
     return [name for name in REQUIRED_ENVIRONMENT if not source.get(name, "").strip()]
 
 
+def _safe_token(value: Any, max_len: int = 64) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned or len(cleaned) > max_len or not re.fullmatch(r"[A-Za-z0-9_.:-]+", cleaned):
+        return None
+    return cleaned
+
+
 class PayPalError(Exception):
     """A redacted adapter failure; ambiguous mutations must keep reservations."""
 
@@ -41,13 +50,62 @@ class PayPalError(Exception):
         ambiguous: bool = False,
         retryable: bool = False,
         issue: str | None = None,
+        error_name: str | None = None,
+        issues: tuple[str, ...] | list[str] | None = None,
+        debug_id: str | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.status_code = status_code
         self.ambiguous = ambiguous
         self.retryable = retryable
-        self.issue = issue
+        cleaned_issues = tuple(dict.fromkeys(tok for tok in (_safe_token(i) for i in (issues or ())) if tok))
+        cleaned_single = _safe_token(issue)
+        if cleaned_single and cleaned_single not in cleaned_issues:
+            cleaned_issues = (cleaned_single, *cleaned_issues)
+        self.issues: tuple[str, ...] = cleaned_issues
+        self.issue = cleaned_single or (cleaned_issues[0] if cleaned_issues else None)
+        self.error_name = _safe_token(error_name)
+        self.debug_id = _safe_token(debug_id)
+
+
+def error_diagnostic_fields(error: PayPalError) -> dict[str, Any]:
+    """Return safe, redacted PayPal error metadata for audit logs without secrets or tokens."""
+    fields: dict[str, Any] = {}
+    if error.status_code is not None:
+        fields["provider_status"] = error.status_code
+    if error.error_name:
+        fields["provider_error"] = error.error_name
+    if error.issues:
+        fields["provider_issues"] = list(error.issues)
+    if error.issue:
+        fields["provider_issue"] = error.issue
+    if error.debug_id:
+        fields["provider_debug_id"] = error.debug_id
+    return fields
+
+
+def provider_failure_message(error: PayPalError, fallback: str) -> str:
+    summary = fallback
+    if not error.ambiguous:
+        if error.issue == "ORDER_NOT_APPROVED":
+            summary = "Approve this order in PayPal before capturing; the reservation is retained"
+        elif error.issue == "INSTRUMENT_DECLINED":
+            summary = "PayPal declined the funding source; return to PayPal and choose another payment method"
+        elif error.status_code in {401, 403}:
+            summary = "PayPal rejected the application credentials or merchant permissions; check the sandbox configuration"
+    parts = [f"code={error.code}"]
+    if error.status_code is not None:
+        parts.append(f"status={error.status_code}")
+    if error.error_name:
+        parts.append(f"name={error.error_name}")
+    if error.issues:
+        parts.append(f"issues={','.join(error.issues)}")
+    elif error.issue:
+        parts.append(f"issues={error.issue}")
+    if error.debug_id:
+        parts.append(f"debug_id={error.debug_id}")
+    return f"{summary} [{', '.join(parts)}]"
 
 
 def _positive_int(value: Any) -> bool:
@@ -135,10 +193,12 @@ class PayPalClient:
         except ValueError:
             result = None
         if not 200 <= response.status_code < 300:
-            issues = {
+            raw_issues = [
                 detail.get("issue") for detail in result.get("details", [])
-                if isinstance(detail, dict) and isinstance(detail.get("issue"), str)
-            } if isinstance(result, dict) and isinstance(result.get("details", []), list) else set()
+                if isinstance(detail, dict)
+            ] if isinstance(result, dict) and isinstance(result.get("details"), list) else []
+            safe_issues = tuple(dict.fromkeys(tok for tok in (_safe_token(item) for item in raw_issues) if tok))
+            issues = set(safe_issues)
             # Unknown provider errors must never release a possibly completed refund.
             definitive = response.status_code in {401, 403} or (
                 response.status_code == 422 and bool(issues) and issues <= {"INSTRUMENT_DECLINED", "ORDER_NOT_APPROVED"}
@@ -153,7 +213,10 @@ class PayPalClient:
                 status_code=response.status_code,
                 ambiguous=mutation and uncertain,
                 retryable=uncertain,
-                issue=next(iter(issues)) if len(issues) == 1 and issues <= {"INSTRUMENT_DECLINED", "ORDER_NOT_APPROVED", "ORDER_ALREADY_CAPTURED"} else None,
+                issue=safe_issues[0] if len(safe_issues) == 1 else None,
+                error_name=result.get("name") if isinstance(result, dict) else None,
+                issues=safe_issues,
+                debug_id=result.get("debug_id") if isinstance(result, dict) else None,
             )
         if not isinstance(result, dict):
             raise PayPalError(

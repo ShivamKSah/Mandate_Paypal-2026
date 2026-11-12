@@ -42,6 +42,40 @@ def assert_real_paypal_id(value: str | None, label: str) -> str:
     return cleaned
 
 
+def likely_cause(status_code: int, detail: str) -> str:
+    upper = detail.upper()
+    if "ORDER_NOT_APPROVED" in upper or "PAYER_ACTION_REQUIRED" in upper:
+        return "Likely cause: buyer approval in PayPal was not finished before pressing Enter. Sign in as the sandbox Personal buyer and complete approval on the URL first."
+    if "INSTRUMENT_DECLINED" in upper:
+        return "Likely cause: sandbox buyer funding instrument was declined; pick another funding source in PayPal."
+    if "PAYEE_MISMATCH" in upper:
+        return "Likely cause: PAYPAL_MERCHANT_ID does not match the sandbox Business account linked to your PayPal REST app."
+    if "VAULT_TOKEN" in upper or "VAULT_INSTRUCTION" in upper or status_code == 409 and "VAULT" in upper:
+        return "Likely cause: PayPal did not issue an active vault token. Enable Features -> Vault on your Sandbox REST app in PayPal Developer Dashboard."
+    if status_code in {401, 403} or "STATUS=401" in upper or "STATUS=403" in upper or "NOT_AUTHORIZED" in upper or "PERMISSION_DENIED" in upper:
+        return "Likely cause: PayPal rejected OAuth credentials or app permissions; verify PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_MERCHANT_ID, and Sandbox Vault access."
+    if "STATUS=500" in upper or "INTERNAL_SERVER_ERROR" in upper or "PROVIDER_UNAVAILABLE" in upper or "NETWORK_ERROR" in upper:
+        return "Likely cause: temporary PayPal Sandbox 5xx / timeout or network interruption; retry shortly."
+    if status_code == 503:
+        return "Likely cause: required server configuration (VAULT_ENCRYPTION_KEY or PayPal sandbox env vars) is missing."
+    return "Likely cause: inspect the redacted diagnostic tags in the detail above and the GRANT_FAILED audit event."
+
+
+def check_response(resp, step: str) -> dict:
+    if resp.is_success:
+        return resp.json()
+    detail = ""
+    try:
+        payload = resp.json()
+        raw_detail = payload.get("detail")
+        detail = raw_detail if isinstance(raw_detail, str) else str(raw_detail or "")
+    except ValueError:
+        detail = (resp.text or "").strip()[:200]
+    print(f"ERROR: HTTP {resp.status_code} during {step}: {detail or '(no detail returned)'}", file=sys.stderr)
+    print(f"       {likely_cause(resp.status_code, detail)}", file=sys.stderr)
+    sys.exit(1)
+
+
 def require_env():
     required = ("DATABASE_URL", "PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_MERCHANT_ID", "VAULT_ENCRYPTION_KEY")
     missing = [name for name in required if not os.getenv(name, "").strip()]
@@ -65,7 +99,11 @@ def main():
     from mandate.main import app
     from mandate.payments.paypal import PayPalClient
 
-    url = os.environ["DATABASE_URL"].replace("postgresql://", "postgresql+psycopg://", 1)
+    url = os.environ["DATABASE_URL"]
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
     admin = create_engine(url)
     schema = f"live_vault_{uuid4().hex[:16]}"
     with admin.begin() as conn:
@@ -102,14 +140,12 @@ def main():
                 "expires_in_minutes": 60,
                 "velocity_limit": 5,
             })
-            mandate.raise_for_status()
-            grant = mandate.json()
+            grant = check_response(mandate, "POST /api/mandates")
             print(f"   Mandate ID: {mask_id(grant['id'])}")
 
             print("2. Initiating $1.00 PayPal vault setup order...")
             init_resp = client.post(f"/api/mandates/{grant['id']}/grant/init", json={})
-            init_resp.raise_for_status()
-            init_data = init_resp.json()
+            init_data = check_response(init_resp, f"POST /api/mandates/{mask_id(grant['id'])}/grant/init")
             grant_order_id = assert_real_paypal_id(init_data.get("order_id"), "Grant order ID")
             approval_url = init_data["approval_url"]
             print(f"   Grant order ID: {mask_id(grant_order_id)}")
@@ -118,8 +154,7 @@ def main():
 
             print("3. Completing vault grant and refunding $1.00 authorization...")
             comp_resp = client.post(f"/api/mandates/{grant['id']}/grant/complete", json={"order_id": grant_order_id})
-            comp_resp.raise_for_status()
-            comp_data = comp_resp.json()
+            comp_data = check_response(comp_resp, f"POST /api/mandates/{mask_id(grant['id'])}/grant/complete")
             print(f"   Vault status: {comp_data['vault_status']} | Masked vault: {comp_data.get('masked_vault_id')} | $1 refund: {comp_data['refund_status']}")
 
             print("4. Submitting $349.00 catalog proposal...")
@@ -129,15 +164,13 @@ def main():
                 "items": [{"product_id": "desk-160", "quantity": 1}],
                 "currency": "USD",
             })
-            prop_resp.raise_for_status()
-            proposal = prop_resp.json()
+            proposal = check_response(prop_resp, "POST /api/proposals")
             assert proposal["decision"] == "APPROVE", proposal
             payment_id = proposal["payment_id"]
 
             print("5. Executing autonomous vault-charge...")
             charge_resp = client.post(f"/api/payments/{payment_id}/vault-charge", json={})
-            charge_resp.raise_for_status()
-            payment = charge_resp.json()
+            payment = check_response(charge_resp, f"POST /api/payments/{mask_id(payment_id)}/vault-charge")
             assert payment["status"] == "CAPTURED", payment
             order_id = assert_real_paypal_id(payment.get("provider_order_id"), "Charged order ID")
             capture_id = assert_real_paypal_id(payment.get("provider_capture_id"), "Capture ID")
@@ -159,11 +192,9 @@ def main():
                 "avoided_freight_cents": 5000,
                 "resale_loss_cents": 5000,
             })
-            case_resp.raise_for_status()
-            case = case_resp.json()
+            case = check_response(case_resp, "POST /api/cases")
             acc_resp = client.post(f"/api/cases/{case['id']}/accept", json={"offer_hash": case["offer_hash"]})
-            acc_resp.raise_for_status()
-            accepted = acc_resp.json()
+            accepted = check_response(acc_resp, f"POST /api/cases/{mask_id(case['id'])}/accept")
             assert accepted["status"] == "REFUNDED", accepted
             print(f"   Partial refund status: {accepted['status']} | Amount: {accepted['offer_cents']} cents")
 
