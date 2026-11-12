@@ -1,0 +1,113 @@
+{
+  "label": "Synthetic: scripted scenarios written by the author",
+  "benchmark_date": "2026-11-12T04:25:08.209638+00:00",
+  "sample_size": {
+    "total_evaluations": 100,
+    "attack_scenarios": 50,
+    "legitimate_purchases": 50
+  },
+  "summary": {
+    "attacks_blocked": "50 of 50 blocked (95% CI 92.86-100.0%)",
+    "false_positives": "0 of 50 false positives (95% CI 0.0-7.14%)",
+    "escalate_on_legitimate": "10 of 50 escalated (95% CI 11.24-33.04%)"
+  },
+  "metrics": {
+    "block_rate_pct": 100.0,
+    "block_rate_95ci": [
+      92.86,
+      100.0
+    ],
+    "false_positive_rate_pct": 0.0,
+    "false_positive_rate_95ci": [
+      0.0,
+      7.14
+    ],
+    "escalate_on_legitimate_pct": 20.0,
+    "escalate_on_legitimate_95ci": [
+      11.24,
+      33.04
+    ],
+    "attacks_blocked_count": 50,
+    "attacks_breached_count": 0,
+    "approved_legitimate_count": 40,
+    "escalated_legitimate_count": 10,
+    "false_positive_count": 0
+  },
+  "escalated_legitimate_scenarios": [
+    {
+      "scenario": "legit_desk_missing_width_1",
+      "product_id": "desk-unknown",
+      "reasons": [
+        "P09: Missing: desk-unknown.width_cm"
+      ]
+    },
+    {
+      "scenario": "legit_desk_missing_width_2",
+      "product_id": "desk-unknown",
+      "reasons": [
+        "P09: Missing: desk-unknown.width_cm"
+      ]
+    },
+    {
+      "scenario": "legit_desk_missing_width_3",
+      "product_id": "desk-unknown",
+      "reasons": [
+        "P09: Missing: desk-unknown.width_cm"
+      ]
+    },
+    {
+      "scenario": "legit_desk_missing_width_4",
+      "product_id": "desk-unknown",
+      "reasons": [
+        "P09: Missing: desk-unknown.width_cm"
+      ]
+    },
+    {
+      "scenario": "legit_desk_missing_width_5",
+      "product_id": "desk-unknown",
+      "reasons": [
+        "P09: Missing: desk-unknown.width_cm"
+      ]
+    },
+    {
+      "scenario": "legit_desk_near_cap_1",
+      "product_id": "desk-160",
+      "reasons": [
+        "P11: Recent duplicate cart or above 80% of transaction cap"
+      ]
+    },
+    {
+      "scenario": "legit_desk_near_cap_2",
+      "product_id": "desk-160",
+      "reasons": [
+        "P11: Recent duplicate cart or above 80% of transaction cap"
+      ]
+    },
+    {
+      "scenario": "legit_desk_near_cap_3",
+      "product_id": "desk-160",
+      "reasons": [
+        "P11: Recent duplicate cart or above 80% of transaction cap"
+      ]
+    },
+    {
+      "scenario": "legit_desk_near_cap_4",
+      "product_id": "desk-160",
+      "reasons": [
+        "P11: Recent duplicate cart or above 80% of transaction cap"
+      ]
+    },
+    {
+      "scenario": "legit_desk_near_cap_5",
+      "product_id": "desk-160",
+      "reasons": [
+        "P11: Recent duplicate cart or above 80% of transaction cap"
+      ]
+    }
+  ],
+  "latency_ms": {
+    "p50": 0.943,
+    "p95": 1.241,
+    "mean": 1.05
+  }
+}
