@@ -66,3 +66,12 @@ def test_run_all_and_session_scoped_challenge_stats(client, database):
 
     assert client.get("/api/ledger/verify").json()["valid"] is True
 
+
+def test_evals_endpoint_serves_synthetic_results(client, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    assert client.get("/api/evals").status_code == 404
+    (tmp_path / "eval_results.json").write_text('{"label": "Synthetic: scripted scenarios written by the author"}', encoding="utf-8")
+    resp = client.get("/api/evals")
+    assert resp.status_code == 200
+    assert resp.json()["label"] == "Synthetic: scripted scenarios written by the author"
+

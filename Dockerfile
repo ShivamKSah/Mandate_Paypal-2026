@@ -20,6 +20,7 @@ RUN python -m pip install --no-cache-dir --no-index --find-links=/wheels mandate
     && groupadd --gid 10001 mandate \
     && useradd --uid 10001 --gid mandate --no-create-home mandate
 COPY --from=web-build --chown=mandate:mandate /build/apps/web/dist /app/apps/web/dist
+COPY --chown=mandate:mandate eval_results.json /app/eval_results.json
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \

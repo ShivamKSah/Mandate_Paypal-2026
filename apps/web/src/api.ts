@@ -160,6 +160,74 @@ const VerifySchema = z.object({
   event_count: z.number().int().nonnegative(),
   checkpoint: z.string().nullable().optional(),
 });
+export const AttackItemSchema = z.object({
+  id: z.string(),
+  expected_rule: z.string(),
+  title: z.string(),
+  description: z.string(),
+});
+export const AttackResultSchema = z.object({
+  id: z.string(),
+  attack_id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  verdict: z.string(),
+  expected_rule: z.string(),
+  actual_rule: z.string(),
+  triggered_rules: z.array(z.string()),
+  breached: z.boolean(),
+  rules: z.array(RuleSchema),
+});
+export const RunAllAttacksSchema = z.object({
+  attempts: z.number().int().nonnegative(),
+  breaches: z.number().int().nonnegative(),
+  blocked: z.number().int().nonnegative(),
+  results: z.array(AttackResultSchema),
+});
+export const ChallengeStatsSchema = z.object({
+  attempts: z.number().int().nonnegative(),
+  breaches: z.number().int().nonnegative(),
+  per_rule_counts: z.record(z.string(), z.number().int().nonnegative()),
+});
+export const EvalResultsSchema = z.object({
+  label: z.string(),
+  benchmark_date: z.string(),
+  sample_size: z.object({
+    total_evaluations: z.number().int(),
+    attack_scenarios: z.number().int(),
+    legitimate_purchases: z.number().int(),
+  }),
+  summary: z.object({
+    attacks_blocked: z.string(),
+    false_positives: z.string(),
+    escalate_on_legitimate: z.string(),
+  }),
+  metrics: z.object({
+    block_rate_pct: z.number(),
+    block_rate_95ci: z.tuple([z.number(), z.number()]),
+    false_positive_rate_pct: z.number(),
+    false_positive_rate_95ci: z.tuple([z.number(), z.number()]),
+    escalate_on_legitimate_pct: z.number(),
+    escalate_on_legitimate_95ci: z.tuple([z.number(), z.number()]),
+    attacks_blocked_count: z.number().int(),
+    attacks_breached_count: z.number().int(),
+    approved_legitimate_count: z.number().int(),
+    escalated_legitimate_count: z.number().int(),
+    false_positive_count: z.number().int(),
+  }),
+  escalated_legitimate_scenarios: z.array(
+    z.object({
+      scenario: z.string(),
+      product_id: z.string(),
+      reasons: z.array(z.string()),
+    }),
+  ),
+  latency_ms: z.object({
+    p50: z.number(),
+    p95: z.number(),
+    mean: z.number(),
+  }),
+});
 const ErrorSchema = z.object({
   detail: z.union([z.string(), z.array(z.object({ msg: z.string() }))]),
 });
@@ -215,6 +283,16 @@ export type Payment = z.infer<typeof PaymentSchema>;
 export type RecoveryCase = z.infer<typeof CaseSchema>;
 export type LedgerEntry = z.infer<typeof LedgerSchema>;
 export type LedgerVerify = z.infer<typeof VerifySchema>;
+export type AttackItem = z.infer<typeof AttackItemSchema>;
+export type AttackResult = z.infer<typeof AttackResultSchema>;
+export type ChallengeStats = z.infer<typeof ChallengeStatsSchema>;
+export type EvalResults = z.infer<typeof EvalResultsSchema>;
+export type AgentRunResponse = {
+  summary: string;
+  llm_fallback: boolean;
+  planner_label?: string;
+  proposal: Proposal;
+};
 let csrfToken = "";
 export function setCsrf(token: string): void {
   csrfToken = token;
@@ -335,6 +413,13 @@ export const api = {
   ledger: () =>
     request("/ledger", list(LedgerSchema)).then((entries) => entries.reverse()),
   verifyLedger: () => request("/ledger/verify", VerifySchema),
+  attacks: () => request("/attacks", list(AttackItemSchema)),
+  runAttack: (attack_id: string) =>
+    request("/attacks/run", AttackResultSchema, post({ attack_id })),
+  runAllAttacks: () =>
+    request("/attacks/run-all", RunAllAttacksSchema, post({})),
+  challengeStats: () => request("/challenge/stats", ChallengeStatsSchema),
+  evals: () => request("/evals", EvalResultsSchema),
   agentRun: (mandate_id: string, instruction: string, allow_fallback = false) =>
     request(
       "/agent-runs",

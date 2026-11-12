@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import {
   api,
+  type AgentRunResponse,
   type Mandate,
   type Product,
   type Proposal,
@@ -39,6 +40,7 @@ export function Proposals({
   proposals,
   working,
   action,
+  onAgentResult,
 }: {
   grant: Mandate | null;
   mandates: Mandate[];
@@ -48,10 +50,12 @@ export function Proposals({
   proposals: Proposal[];
   working: boolean;
   action: Action;
+  onAgentResult?: (res: AgentRunResponse) => void;
 }) {
   const [selected, setSelected] = useState("desk-160");
   const [quantity, setQuantity] = useState("1");
   const [customTotal, setCustomTotal] = useState("");
+  const [allowFallback, setAllowFallback] = useState(true);
   const [agentInstruction, setAgentInstruction] = useState(
     "Find a desk that meets my approved width requirement.",
   );
@@ -257,15 +261,28 @@ export function Proposals({
                 onChange={(e) => setAgentInstruction(e.target.value)}
               />
             </label>
+            <label className="checkbox-inline">
+              <input
+                type="checkbox"
+                checked={allowFallback}
+                onChange={(e) => setAllowFallback(e.target.checked)}
+              />
+              <span>Allow rules planner fallback if LLM is unavailable</span>
+            </label>
             <button
               className="button-quiet"
               disabled={working || !grant || !agentInstruction.trim()}
               onClick={() =>
                 grant &&
-                void action(
-                  () => api.agentRun(grant.id, agentInstruction),
-                  "Agent run completed.",
-                )
+                void action(async () => {
+                  const res = await api.agentRun(
+                    grant.id,
+                    agentInstruction,
+                    allowFallback,
+                  );
+                  onAgentResult?.(res);
+                  return res;
+                }, "Agent run completed.")
               }
             >
               Run shopping agent <ArrowUpRight size={14} />

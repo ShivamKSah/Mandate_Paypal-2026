@@ -9,6 +9,7 @@ import {
   CircleAlert,
   FileClock,
   RotateCcw,
+  ShieldAlert,
   ShoppingBag,
   WalletCards,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import { useDashboard } from "./useDashboard";
 import { Login } from "./Login";
 import { Overview } from "./Overview";
 import { Proposals } from "./Proposals";
+import { Challenge } from "./Challenge";
 import { Payments } from "./Payments";
 import { Recovery } from "./Recovery";
 import { Ledger } from "./Ledger";
@@ -30,6 +32,7 @@ function checkoutReturn() {
 const iconMap = {
   overview: House,
   proposals: ShoppingBag,
+  challenge: ShieldAlert,
   payments: WalletCards,
   recovery: RotateCcw,
   ledger: FileClock,
@@ -37,6 +40,7 @@ const iconMap = {
 const views: { id: View; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "proposals", label: "Proposals" },
+  { id: "challenge", label: "Challenge" },
   { id: "payments", label: "Payments" },
   { id: "recovery", label: "Recovery" },
   { id: "ledger", label: "Ledger" },
@@ -51,6 +55,10 @@ export default function App() {
     callback ? "payments" : "overview",
   );
   const [selectedGrantId, setSelectedGrantId] = useState("");
+  const [agentFallbackRun, setAgentFallbackRun] = useState<{
+    planner: string;
+    summary: string;
+  } | null>(null);
   const viewTransition = useRef<ViewTransition | null>(null);
   const requestedView = useRef(view);
   function setView(next: View) {
@@ -121,6 +129,9 @@ export default function App() {
     cases,
     ledger,
     verify,
+    attacks,
+    challengeStats,
+    evals,
   } = state.data;
   const usableGrants = activeGrants(mandates, now);
   const currentGrant =
@@ -266,6 +277,62 @@ export default function App() {
             </button>
           </div>
         )}
+        <nav className="flow-strip" aria-label="Mandate workflow steps">
+          <button
+            type="button"
+            className={`flow-step ${view === "overview" ? "current" : ""}`}
+            onClick={() => setView("overview")}
+          >
+            <span>01</span>
+            <div>
+              <strong>Grant</strong>
+              <small>Budget, cap &amp; vault mode</small>
+            </div>
+          </button>
+          <button
+            type="button"
+            className={`flow-step ${view === "proposals" || view === "payments" ? "current" : ""}`}
+            onClick={() => setView("proposals")}
+          >
+            <span>02</span>
+            <div>
+              <strong>Agent buys</strong>
+              <small>P01–P11 policy &amp; PayPal execution</small>
+            </div>
+          </button>
+          <button
+            type="button"
+            className={`flow-step ${view === "recovery" ? "current" : ""}`}
+            onClick={() => setView("recovery")}
+          >
+            <span>03</span>
+            <div>
+              <strong>When something goes wrong</strong>
+              <small>Bounded recovery &amp; audit ledger</small>
+            </div>
+          </button>
+        </nav>
+        {agentFallbackRun && (
+          <div className="provider-banner fallback-banner" role="status">
+            <span className="banner-icon">
+              <CircleAlert size={16} aria-hidden="true" />
+            </span>
+            <div>
+              <strong>{agentFallbackRun.planner}</strong>
+              <span>
+                Deterministic catalog fallback was used (llm_fallback=true):{" "}
+                {agentFallbackRun.summary}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="button-quiet"
+              onClick={() => setAgentFallbackRun(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <div className="view-content">
           {view === "overview" && (
             <Overview
@@ -298,6 +365,26 @@ export default function App() {
               proposals={proposals}
               working={working}
               action={action}
+              onAgentResult={(res) =>
+                setAgentFallbackRun(
+                  res.llm_fallback
+                    ? {
+                        planner:
+                          res.planner_label ?? "Rules planner, LLM unavailable",
+                        summary: res.summary,
+                      }
+                    : null,
+                )
+              }
+            />
+          )}
+          {view === "challenge" && (
+            <Challenge
+              attacks={attacks}
+              stats={challengeStats}
+              evals={evals}
+              working={working}
+              action={action}
             />
           )}
           {view === "payments" && (
@@ -321,7 +408,9 @@ export default function App() {
               action={action}
             />
           )}
-          {view === "ledger" && <Ledger entries={ledger} verify={verify} />}
+          {view === "ledger" && (
+            <Ledger entries={ledger} verify={verify} proposals={proposals} />
+          )}
         </div>
       </main>
     </div>

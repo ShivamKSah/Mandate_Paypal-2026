@@ -62,8 +62,9 @@ export function Overview({
   paypalConfigured: boolean;
 }) {
   const [budget, setBudget] = useState("500");
-  const [cap, setCap] = useState("500");
+  const [cap, setCap] = useState("400");
   const [constraint, setConstraint] = useState("160");
+  const [preferredMode, setPreferredMode] = useState<"buyer" | "vault">("buyer");
   const [creatingGrant, setCreatingGrant] = useState(false);
   const [vaultLink, setVaultLink] = useState<{
     grantId: string;
@@ -86,17 +87,17 @@ export function Overview({
       await createGrant({
         budget_cents: parseMoney(budget, "Budget", 1),
         per_transaction_cents: parseMoney(cap, "Per-purchase cap", 1),
-        allowed_categories: ["furniture"],
+        allowed_categories: ["furniture", "electronics"],
         allowed_merchants: ["demo-merchant"],
         constraints: {
           width_cm: parseInteger(constraint, "Desk width", 10000),
         },
-        instruction: `Office furniture only. Desk width must be ${constraint} cm.`,
+        instruction: `Office furniture and electronics. Desk width must be ${constraint} cm.`,
         expires_in_minutes: 60,
         velocity_limit: 5,
       });
       setCreatingGrant(false);
-    }, "Spending grant created.");
+    }, preferredMode === "vault" ? "Grant created. Complete the $1.00 PayPal vault authorization below to enable Autonomous (vaulted) mode." : "Spending grant created.");
   }
   return (
     <>
@@ -345,8 +346,27 @@ export function Overview({
                 </label>
               </div>
               <label>
-                Purchase rule
-                <input value="Office furniture only" readOnly />
+                Purchase rules
+                <input value="Office furniture & electronics · demo-merchant" readOnly />
+              </label>
+              <label>
+                Payment mode
+                <div className="mode-toggle" role="group" aria-label="Payment mode">
+                  <button
+                    type="button"
+                    className={`mode-option ${preferredMode === "buyer" ? "active" : ""}`}
+                    onClick={() => setPreferredMode("buyer")}
+                  >
+                    Buyer approves each purchase
+                  </button>
+                  <button
+                    type="button"
+                    className={`mode-option ${preferredMode === "vault" ? "active" : ""}`}
+                    onClick={() => setPreferredMode("vault")}
+                  >
+                    Autonomous (vaulted)
+                  </button>
+                </div>
               </label>
               <label>
                 Desk width · cm

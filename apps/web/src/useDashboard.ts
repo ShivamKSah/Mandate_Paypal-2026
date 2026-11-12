@@ -4,16 +4,33 @@ import { message, type Action } from "./domain";
 async function loadDashboard() {
   const session = await api.session();
   setCsrf(session.csrf_token);
-  const [products, mandates, proposals, payments, cases, ledger, verify] =
-    await Promise.all([
-      api.catalog(),
-      api.mandates(),
-      api.proposals(),
-      api.payments(),
-      api.cases(),
-      api.ledger(),
-      api.verifyLedger().catch(() => null),
-    ]);
+  const [
+    products,
+    mandates,
+    proposals,
+    payments,
+    cases,
+    ledger,
+    verify,
+    attacks,
+    challengeStats,
+    evals,
+  ] = await Promise.all([
+    api.catalog(),
+    api.mandates(),
+    api.proposals(),
+    api.payments(),
+    api.cases(),
+    api.ledger(),
+    api.verifyLedger().catch(() => null),
+    api.attacks().catch(() => []),
+    api.challengeStats().catch(() => ({
+      attempts: 0,
+      breaches: 0,
+      per_rule_counts: {},
+    })),
+    api.evals().catch(() => null),
+  ]);
   return {
     session,
     products,
@@ -23,6 +40,9 @@ async function loadDashboard() {
     cases,
     ledger,
     verify,
+    attacks,
+    challengeStats,
+    evals,
   };
 }
 type DashboardState =

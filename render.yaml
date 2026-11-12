@@ -46,3 +46,4 @@ databases:
     # TODO: Upgrade to a paid PostgreSQL plan before judging!
     # Render's free PostgreSQL tier expires automatically after 30 days, and judging runs until Dec 15.
     plan: free
+

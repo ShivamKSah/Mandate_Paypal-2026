@@ -1,6 +1,8 @@
 """Break-the-Mandate adversarial attack simulator and challenge counter."""
 from datetime import timedelta
+import json
 import logging
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -315,4 +317,12 @@ def challenge_stats(owner=Depends(human), db: DBSession = Depends(get_db)):
         "breaches": sum(1 for row in rows if row.breached),
         "per_rule_counts": per_rule_counts,
     }
+
+
+@router.get("/evals")
+def get_eval_results(owner=Depends(human)):
+    eval_path = Path.cwd() / "eval_results.json"
+    if not eval_path.is_file():
+        raise HTTPException(404, "Evaluation results have not been generated yet")
+    return json.loads(eval_path.read_text(encoding="utf-8"))
 

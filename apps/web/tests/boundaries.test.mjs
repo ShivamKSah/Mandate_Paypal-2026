@@ -12,6 +12,8 @@ import {
 import {
   api,
   ApiError,
+  ChallengeStatsSchema,
+  EvalResultsSchema,
   MandateSchema,
   PaymentSchema,
   setCsrf,
@@ -253,5 +255,56 @@ test("vault charge capability requires granted vault status and current authorit
     paymentActions(reserved, proposal, { ...vaulted, status: "REVOKED" }, now)
       .vaultCharge,
     false,
+  );
+});
+
+test("challenge stats and synthetic evaluation schemas enforce exact fields", () => {
+  assert.equal(
+    ChallengeStatsSchema.safeParse({
+      attempts: 15,
+      breaches: 0,
+      per_rule_counts: { P01: 2, P04: 2 },
+    }).success,
+    true,
+  );
+  assert.equal(
+    ChallengeStatsSchema.safeParse({
+      attempts: -1,
+      breaches: 0,
+      per_rule_counts: {},
+    }).success,
+    false,
+  );
+  assert.equal(
+    EvalResultsSchema.safeParse({
+      label: "Synthetic: scripted scenarios written by the author",
+      benchmark_date: "2026-11-12T00:00:00Z",
+      sample_size: {
+        total_evaluations: 100,
+        attack_scenarios: 50,
+        legitimate_purchases: 50,
+      },
+      summary: {
+        attacks_blocked: "50 of 50 blocked (95% CI 92.86-100.0%)",
+        false_positives: "0 of 50 false positives (95% CI 0.0-7.14%)",
+        escalate_on_legitimate: "10 of 50 escalated (95% CI 11.24-33.04%)",
+      },
+      metrics: {
+        block_rate_pct: 100,
+        block_rate_95ci: [92.86, 100],
+        false_positive_rate_pct: 0,
+        false_positive_rate_95ci: [0, 7.14],
+        escalate_on_legitimate_pct: 20,
+        escalate_on_legitimate_95ci: [11.24, 33.04],
+        attacks_blocked_count: 50,
+        attacks_breached_count: 0,
+        approved_legitimate_count: 40,
+        escalated_legitimate_count: 10,
+        false_positive_count: 0,
+      },
+      escalated_legitimate_scenarios: [],
+      latency_ms: { p50: 0.9, p95: 1.2, mean: 1.0 },
+    }).success,
+    true,
   );
 });

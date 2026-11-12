@@ -28,6 +28,12 @@ export function Recovery({
   const [evidence, setEvidence] = useState("");
   const [freight, setFreight] = useState("60");
   const [resale, setResale] = useState("87.25");
+  const [suggestion, setSuggestion] = useState<{
+    suggested_cause: string;
+    explanation: string;
+    policy_band_pct: [number, number];
+    llm_fallback: boolean;
+  } | null>(null);
   async function open(event: React.FormEvent) {
     event.preventDefault();
     await action(
@@ -105,6 +111,38 @@ export function Recovery({
               onChange={(e) => setEvidence(e.target.value)}
             />
           </label>
+          <div className="suggest-row">
+            <button
+              type="button"
+              className="button-outline"
+              disabled={
+                working ||
+                !captured.some((payment) => payment.id === paymentId) ||
+                !evidence.trim()
+              }
+              onClick={() =>
+                void action(async () => {
+                  const res = await api.suggestCause(paymentId, evidence);
+                  setSuggestion(res);
+                  return res;
+                }, "Advisory cause suggestion updated. Human selection still controls the offer.")
+              }
+            >
+              Suggest cause (advisory)
+            </button>
+          </div>
+          {suggestion && (
+            <div className="suggestion-box" role="status">
+              <strong>
+                Suggested: {suggestion.suggested_cause.replaceAll("_", " ")} (
+                {suggestion.policy_band_pct[0]}–{suggestion.policy_band_pct[1]}%)
+              </strong>
+              <p>{suggestion.explanation}</p>
+              {suggestion.llm_fallback && (
+                <small>Rules heuristic fallback used (LLM unavailable).</small>
+              )}
+            </div>
+          )}
           <div className="form-row">
             <label>
               Avoided freight · USD

@@ -22,8 +22,8 @@
     height: auto;
     padding: 8px 8px max(10px, env(safe-area-inset-bottom));
     border-right: 0;
-    border-top: 1px solid #323946;
-    background: #171b22f5;
+    border-top: 1px solid var(--line);
+    background: #fffffff5;
     backdrop-filter: blur(16px);
     display: block;
   }
@@ -44,7 +44,7 @@
   }
   .rail nav {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 2px;
   }
   .nav-item {
@@ -165,14 +165,22 @@
     font-size: 8px;
   }
   .ledger-table-head,
-  .ledger-event summary {
+  .ledger-event summary,
+  .ledger-row-btn {
     grid-template-columns: 1.2fr 1fr;
     gap: 7px;
   }
   .ledger-table-head span:nth-child(n + 3),
   .ledger-event summary > time,
-  .ledger-event summary > code:last-child {
+  .ledger-event summary > code:last-child,
+  .ledger-row-btn > time,
+  .ledger-row-btn > code:last-child {
     display: none;
+  }
+  .flow-strip,
+  .challenge-counters,
+  .ledger-layout.with-drawer {
+    grid-template-columns: 1fr;
   }
   .form-row {
     gap: 8px;

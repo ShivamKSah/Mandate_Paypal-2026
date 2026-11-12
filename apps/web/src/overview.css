@@ -121,8 +121,8 @@
   grid-area: cards;
   align-self: stretch;
   padding: 24px 30px 18px;
-  background: linear-gradient(155deg, #1a2537, #15191f 55%);
-  border-color: #303a4b;
+  background: var(--white);
+  border-color: var(--line);
 }
 .grant-stack {
   max-width: 540px;
@@ -138,22 +138,22 @@
   margin: 0 8% -24px;
   padding: 10px 16px 24px;
   border-radius: 16px 16px 0 0;
-  background: linear-gradient(110deg, #2b3a53, #1a263a);
-  border: 1px solid #40506a;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
   font-size: 11px;
-  color: #c0cce0;
+  color: #334155;
 }
 .grant-card-peek:has(+ .grant-card-face) {
   margin-inline: 4%;
-  background: linear-gradient(110deg, #354050, #202936);
+  background: #eff6ff;
 }
 .grant-card-backing::after {
   content: "";
   position: absolute;
   inset: 19px -5% -14px;
   border-radius: 16px 16px 0 0;
-  background: linear-gradient(110deg, #2a3547, #1f2630);
-  border: 1px solid #3a4558;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
 }
 .grant-card-face {
   position: relative;
@@ -165,8 +165,8 @@
   aspect-ratio: 1.8;
   padding: 25px 26px 20px;
   isolation: isolate;
-  background: linear-gradient(140deg, #30363e 0%, #1b1f25 50%, #101215 100%);
-  color: #f3f5f9;
+  background: linear-gradient(140deg, #1e293b 0%, #0f172a 100%);
+  color: #f8fafc;
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath fill='white' d='M0 0H32C36 0 36 6 42 6H58C64 6 64 0 68 0H100V100H0Z'/%3E%3C/svg%3E");
   mask-size: 100% 100%;
   mask-repeat: no-repeat;
@@ -249,18 +249,21 @@
   gap: 7px;
   min-height: 70px;
   padding: 10px 4px;
-  border: 1px solid #dce4f1;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #e9eff8;
-  color: #1c283b;
+  background: var(--surface-raised);
+  color: var(--ink);
   font-size: 12px;
   font-weight: 600;
   transition:
     background var(--motion-fast),
+    border-color var(--motion-fast),
     transform var(--motion-fast);
 }
 .wallet-actions button:hover {
-  background: #fff;
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
   transform: translateY(-2px);
 }
 .wallet-note {
@@ -282,9 +285,10 @@
   min-height: 36px;
   padding: 7px 9px;
   font-size: 11px;
-  color: #c6d3e9;
-  background: #ffffff05;
-  border-color: #ffffff1a;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
 }
 .sr-only {
   position: absolute;
@@ -419,12 +423,12 @@
   flex: 0 0 40px;
   height: 40px;
   border-radius: 13px;
-  background: #232c3a;
-  color: #afc7ed;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .transaction-icon.settled {
-  background: #242931;
-  color: #c2ccdc;
+  background: var(--green-soft);
+  color: var(--green);
 }
 .transaction-main {
   flex: 1;
@@ -518,13 +522,7 @@
 }
 @media (max-width: 760px) {
   body {
-    background:
-      radial-gradient(
-        ellipse 115% 340px at 45% -50px,
-        #2b4d81 0%,
-        transparent 100%
-      ),
-      var(--paper);
+    background: var(--paper);
   }
   .mobile-brand {
     display: flex;
@@ -545,8 +543,8 @@
       10px "Manrope",
       sans-serif;
     letter-spacing: 0;
-    color: #b3c9e9;
-    border-left: 1px solid #ffffff25;
+    color: var(--accent);
+    border-left: 1px solid var(--line);
     padding-left: 9px;
     margin-left: 2px;
   }
@@ -563,13 +561,13 @@
     gap: 10px;
   }
   .top-actions .icon-button {
-    background: #ffffff0b;
-    border-color: #ffffff1a;
+    background: var(--white);
+    border-color: var(--line);
     border-radius: 50%;
   }
   .top-actions .button-quiet {
     font-size: 11px;
-    color: #d1dcf0;
+    color: var(--muted);
   }
   .page-title {
     margin: 20px 0 24px;

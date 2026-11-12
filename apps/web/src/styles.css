@@ -13,7 +13,7 @@
   src: url("./assets/fonts/sora-latin-variable.woff2") format("woff2");
 }
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-family: "Manrope", sans-serif;
   font-size: 16px;
   line-height: 1.5;
@@ -21,20 +21,20 @@
   background: var(--paper);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --paper: #0d0f12;
-  --white: #171a1f;
-  --surface-raised: #20242b;
-  --ink: #f0f2f6;
-  --muted: #9ca5b4;
-  --line: #2a2f38;
-  --accent: #8eb7ff;
-  --accent-soft: #202e46;
-  --green: #85caa7;
-  --green-soft: #1b332a;
-  --red: #f0a299;
-  --red-soft: #362321;
-  --amber: #e6bf7c;
-  --amber-soft: #332b1e;
+  --paper: #f8fafc;
+  --white: #ffffff;
+  --surface-raised: #f1f5f9;
+  --ink: #0f172a;
+  --muted: #475569;
+  --line: #e2e8f0;
+  --accent: #2563eb;
+  --accent-soft: #eff6ff;
+  --green: #15803d;
+  --green-soft: #dcfce7;
+  --red: #b91c1c;
+  --red-soft: #fee2e2;
+  --amber: #b45309;
+  --amber-soft: #fef3c7;
   --mono: "SFMono-Regular", Consolas, monospace;
   --display: "Sora", sans-serif;
   --ease-fluid: cubic-bezier(0.16, 1, 0.3, 1);
@@ -47,9 +47,8 @@
 body {
   margin: 0;
   min-width: 320px;
-  background:
-    radial-gradient(ellipse 65% 370px at 40% 0, #1c3151 0, transparent 100%),
-    var(--paper);
+  background: var(--paper);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
 }
 button,
@@ -86,7 +85,7 @@ summary:focus-visible {
   position: fixed;
   inset: 0 auto 0 0;
   width: var(--rail-width);
-  background: #111419;
+  background: var(--white);
   border-right: 1px solid var(--line);
   padding: 27px 16px 19px;
   display: flex;
@@ -114,8 +113,8 @@ summary:focus-visible {
   width: 32px;
   height: 32px;
   border-radius: 13px;
-  background: #e9effa;
-  color: #1c2d4b;
+  background: var(--accent);
+  color: #ffffff;
   display: grid;
   place-items: center;
   font: 600 20px var(--display);
@@ -155,7 +154,7 @@ summary:focus-visible {
 }
 .nav-item.selected {
   background: var(--accent-soft);
-  color: #c2d6ff;
+  color: var(--accent);
   font-weight: 600;
 }
 .nav-item i {
@@ -177,11 +176,11 @@ summary:focus-visible {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--surface-raised);
-  color: #bdcbea;
+  background: var(--accent-soft);
+  color: var(--accent);
   display: grid;
   place-items: center;
-  font: 12px var(--mono);
+  font: 600 12px var(--mono);
 }
 .rail-footer strong,
 .rail-footer span {
@@ -205,8 +204,8 @@ summary:focus-visible {
 }
 .main-content {
   margin-left: var(--rail-width);
-  padding: 0 clamp(24px, 3.5vw, 56px) 64px;
-  max-width: 1600px;
+  padding: 0 clamp(20px, 3vw, 40px) 64px;
+  max-width: calc(var(--rail-width) + 1140px);
 }
 .topbar {
   min-height: 82px;
@@ -259,7 +258,7 @@ summary:focus-visible {
 .provider-banner {
   margin-top: 21px;
   background: var(--amber-soft);
-  border: 1px solid #51442f;
+  border: 1px solid #fcd34d;
   border-radius: 12px;
   padding: 13px 16px;
   display: flex;
@@ -279,7 +278,7 @@ summary:focus-visible {
 }
 .provider-banner strong {
   font-size: 14px;
-  color: #f3d8ac;
+  color: #78350f;
   margin-bottom: 3px;
 }
 .provider-banner div span {
@@ -316,7 +315,7 @@ summary:focus-visible {
 }
 .notice.info {
   background: var(--accent-soft);
-  color: #c2d6ff;
+  color: var(--accent);
 }
 .notice button {
   border: 0;
@@ -366,20 +365,22 @@ summary:focus-visible {
     box-shadow var(--motion-fast) ease;
 }
 .button-dark {
-  background: #e9effa;
-  color: #152239;
+  background: var(--ink);
+  color: #ffffff;
 }
-.button-dark:hover {
-  background: #ffffff;
+.button-dark:hover:not(:disabled) {
+  background: var(--accent);
 }
 .button-outline {
-  border: 1px solid #43516b;
-  background: var(--accent-soft);
-  color: #d2e0fa;
+  border: 1px solid #cbd5e1;
+  background: var(--white);
+  color: var(--ink);
   text-decoration: none;
 }
-.button-outline:hover {
-  background: #2d3e5b;
+.button-outline:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .button-quiet {
   background: transparent;
@@ -485,8 +486,8 @@ summary:focus-visible {
 .form-panel select,
 .form-panel textarea {
   width: 100%;
-  border: 1px solid #38404d;
-  background: #12151a;
+  border: 1px solid #cbd5e1;
+  background: var(--white);
   border-radius: 12px;
   padding: 10px 11px;
   color: var(--ink);
@@ -511,8 +512,9 @@ summary:focus-visible {
   gap: 5px;
   border: 0;
   background: transparent;
-  color: #b4c9ed;
+  color: var(--accent);
   font-size: 12px;
+  font-weight: 600;
   padding: 4px;
 }
 .text-link:hover {
@@ -667,7 +669,7 @@ summary:focus-visible {
 }
 html {
   scroll-behavior: smooth;
-  scrollbar-color: #46546a var(--paper);
+  scrollbar-color: #cbd5e1 var(--paper);
 }
 input,
 select,
