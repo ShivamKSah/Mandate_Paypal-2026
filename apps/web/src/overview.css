@@ -142,23 +142,23 @@
   min-height: 50px;
   margin: 0 8% -24px;
   padding: 10px 16px 24px;
-  border-radius: 16px 16px 0 0;
-  background: #e2e8f0;
-  border: 1px solid #cbd5e1;
+  border-radius: 14px 14px 0 0;
+  background: #eceae4;
+  border: 1px solid var(--line-strong);
   font-size: 11px;
-  color: #334155;
+  color: var(--muted);
 }
 .grant-card-peek:has(+ .grant-card-face) {
   margin-inline: 4%;
-  background: #eff6ff;
+  background: var(--accent-soft);
 }
 .grant-card-backing::after {
   content: "";
   position: absolute;
   inset: 19px -5% -14px;
-  border-radius: 16px 16px 0 0;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
+  border-radius: 14px 14px 0 0;
+  background: #f3f1ec;
+  border: 1px solid var(--line);
 }
 .grant-card-face {
   position: relative;
@@ -170,17 +170,28 @@
   aspect-ratio: 1.8;
   padding: 25px 26px 20px;
   isolation: isolate;
-  background: linear-gradient(140deg, #1e293b 0%, #0f172a 100%);
+  background:
+    radial-gradient(120% 90% at 10% 0%, rgba(59, 130, 246, 0.14) 0%, transparent 55%),
+    linear-gradient(142deg, #181a20 0%, #242834 55%, #111216 100%);
   color: #f8fafc;
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath fill='white' d='M0 0H32C36 0 36 6 42 6H58C64 6 64 0 68 0H100V100H0Z'/%3E%3C/svg%3E");
   mask-size: 100% 100%;
   mask-repeat: no-repeat;
-  border-radius: 19px;
+  border-radius: 16px;
   box-shadow:
-    inset 0 1px 0 #ffffff24,
-    inset 0 0 0 1px #ffffff0a;
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 10px 24px rgba(17, 18, 22, 0.16);
   font-variant-numeric: tabular-nums;
   animation: grant-select var(--motion-flow) var(--ease-fluid);
+  transition: transform var(--motion-flow) var(--ease-fluid), box-shadow var(--motion-flow) ease;
+}
+.grant-card-face:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 14px 28px rgba(17, 18, 22, 0.22);
 }
 .grant-card-top,
 .grant-card-bottom {
@@ -255,15 +266,16 @@
   min-height: 70px;
   padding: 10px 4px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-raised);
+  border-radius: 10px;
+  background: var(--paper);
   color: var(--ink);
   font-size: 12px;
   font-weight: 600;
   transition:
-    background var(--motion-fast),
-    border-color var(--motion-fast),
-    transform var(--motion-fast);
+    background var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--ease-fluid);
 }
 .wallet-actions button:hover {
   background: var(--accent-soft);
@@ -712,6 +724,7 @@
   html {
     scroll-behavior: auto;
   }
+  .panel,
   .grant-card-face {
     animation: none;
   }

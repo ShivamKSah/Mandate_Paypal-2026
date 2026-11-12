@@ -10,18 +10,21 @@
   flex-direction: column;
   align-items: flex-start;
   height: 100%;
-  min-height: 112px;
+  min-height: 108px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--white);
   text-align: left;
-  padding: 15px 13px;
+  padding: 14px 13px;
+  box-shadow: var(--shadow-card);
   transition:
-    border-color 0.15s,
-    transform 0.15s;
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    transform var(--motion-fast) var(--ease-fluid);
 }
 .scenario-card:hover:not(:disabled) {
   border-color: var(--accent);
+  box-shadow: var(--shadow-lift);
   transform: translateY(-2px);
 }
 .scenario-number {
@@ -698,39 +701,55 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
-  gap: 10px;
-  margin-top: 16px;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 4px;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 11px;
 }
 .flow-step {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   height: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--white);
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
   text-align: left;
-  transition: border-color var(--motion-fast), background-color var(--motion-fast);
+  transition:
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
 }
 .flow-step > div {
   min-width: 0;
   flex: 1;
 }
-.flow-step:hover,
+.flow-step:hover {
+  background: rgba(255, 255, 255, 0.55);
+}
 .flow-step.current {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--line);
+  background: var(--white);
+  box-shadow: 0 1px 2px rgba(20, 21, 24, 0.05);
 }
 .flow-step > span {
   flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--accent-soft);
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--white);
+  border: 1px solid var(--line);
   display: grid;
   place-items: center;
-  font: 600 12px var(--mono);
+  font: 600 11px var(--mono);
+  color: var(--muted);
+}
+.flow-step.current > span {
+  background: var(--accent-soft);
+  border-color: transparent;
   color: var(--accent);
 }
 .flow-step strong,
@@ -806,8 +825,9 @@
 .counter-card {
   background: var(--white);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 10px;
   padding: 14px 16px;
+  box-shadow: var(--shadow-card);
 }
 .counter-card span {
   display: block;
@@ -840,12 +860,17 @@
 }
 .attack-card {
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 13px;
   background: var(--paper);
   display: flex;
   flex-direction: column;
   gap: 8px;
+  transition: border-color var(--motion-fast) ease, background-color var(--motion-fast) ease;
+}
+.attack-card:hover {
+  border-color: var(--line-strong);
+  background: var(--white);
 }
 .attack-card-head {
   display: flex;
@@ -1017,10 +1042,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 13px 15px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--paper);
+  transition: border-color var(--motion-fast) ease, background-color var(--motion-fast) ease;
+}
+.guided-step:hover {
+  border-color: var(--line-strong);
 }
 .guided-step.done {
   border-color: #bbf7d0;
