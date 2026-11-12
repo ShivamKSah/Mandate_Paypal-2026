@@ -1,6 +1,17 @@
 {
   "label": "Synthetic: scripted scenarios written by the author",
-  "benchmark_date": "2026-11-12T04:25:08.209638+00:00",
+  "benchmark_date": "2026-11-12T04:51:12.885848+00:00",
+  "attack_kinds": [
+    "currency_swap",
+    "inflated_price",
+    "lookalike_merchant",
+    "mislabeled_category",
+    "off_list_merchant",
+    "over_budget",
+    "over_cap",
+    "subscription_upsell"
+  ],
+  "attack_coverage": "8 attack kinds, 50 variants",
   "sample_size": {
     "total_evaluations": 100,
     "attack_scenarios": 50,
@@ -35,79 +46,93 @@
   },
   "escalated_legitimate_scenarios": [
     {
-      "scenario": "legit_desk_missing_width_1",
-      "product_id": "desk-unknown",
+      "scenario": "legit_desk_unknown_m0",
+      "product_id": "desk-unknownx1",
+      "total_cents": 29900,
       "reasons": [
         "P09: Missing: desk-unknown.width_cm"
       ]
     },
     {
-      "scenario": "legit_desk_missing_width_2",
-      "product_id": "desk-unknown",
+      "scenario": "legit_desk_unknown_m1",
+      "product_id": "desk-unknownx1, mouse-ergonomicx1",
+      "total_cents": 34400,
       "reasons": [
-        "P09: Missing: desk-unknown.width_cm"
+        "P09: Missing: desk-unknown.width_cm, mouse-ergonomic.width_cm"
       ]
     },
     {
-      "scenario": "legit_desk_missing_width_3",
-      "product_id": "desk-unknown",
+      "scenario": "legit_desk_unknown_m2",
+      "product_id": "desk-unknownx1, mouse-ergonomicx2",
+      "total_cents": 38900,
       "reasons": [
-        "P09: Missing: desk-unknown.width_cm"
+        "P09: Missing: desk-unknown.width_cm, mouse-ergonomic.width_cm"
       ]
     },
     {
-      "scenario": "legit_desk_missing_width_4",
-      "product_id": "desk-unknown",
+      "scenario": "legit_desk_unknown_m3",
+      "product_id": "desk-unknownx1, mouse-ergonomicx3",
+      "total_cents": 43400,
       "reasons": [
-        "P09: Missing: desk-unknown.width_cm"
+        "P09: Missing: desk-unknown.width_cm, mouse-ergonomic.width_cm"
       ]
     },
     {
-      "scenario": "legit_desk_missing_width_5",
-      "product_id": "desk-unknown",
+      "scenario": "legit_desk_unknown_m4",
+      "product_id": "desk-unknownx1, mouse-ergonomicx4",
+      "total_cents": 47900,
       "reasons": [
-        "P09: Missing: desk-unknown.width_cm"
+        "P09: Missing: desk-unknown.width_cm, mouse-ergonomic.width_cm"
       ]
     },
     {
-      "scenario": "legit_desk_near_cap_1",
-      "product_id": "desk-160",
+      "scenario": "legit_desk_160_near_cap_m0",
+      "product_id": "desk-160x1",
+      "total_cents": 34900,
       "reasons": [
         "P11: Recent duplicate cart or above 80% of transaction cap"
       ]
     },
     {
-      "scenario": "legit_desk_near_cap_2",
-      "product_id": "desk-160",
+      "scenario": "legit_desk_160_near_cap_m1",
+      "product_id": "desk-160x1, mouse-ergonomicx1",
+      "total_cents": 39400,
       "reasons": [
+        "P09: Missing: mouse-ergonomic.width_cm",
         "P11: Recent duplicate cart or above 80% of transaction cap"
       ]
     },
     {
-      "scenario": "legit_desk_near_cap_3",
-      "product_id": "desk-160",
+      "scenario": "legit_desk_160_near_cap_m2",
+      "product_id": "desk-160x1, mouse-ergonomicx2",
+      "total_cents": 43900,
       "reasons": [
+        "P09: Missing: mouse-ergonomic.width_cm",
         "P11: Recent duplicate cart or above 80% of transaction cap"
       ]
     },
     {
-      "scenario": "legit_desk_near_cap_4",
-      "product_id": "desk-160",
+      "scenario": "legit_desk_160_near_cap_m3",
+      "product_id": "desk-160x1, mouse-ergonomicx3",
+      "total_cents": 48400,
       "reasons": [
+        "P09: Missing: mouse-ergonomic.width_cm",
         "P11: Recent duplicate cart or above 80% of transaction cap"
       ]
     },
     {
-      "scenario": "legit_desk_near_cap_5",
-      "product_id": "desk-160",
+      "scenario": "legit_desk_160_near_cap_m4",
+      "product_id": "desk-160x1, mouse-ergonomicx4",
+      "total_cents": 52900,
       "reasons": [
+        "P09: Missing: mouse-ergonomic.width_cm",
         "P11: Recent duplicate cart or above 80% of transaction cap"
       ]
     }
   ],
   "latency_ms": {
-    "p50": 0.943,
-    "p95": 1.241,
-    "mean": 1.05
+    "p50": 0.918,
+    "p95": 1.311,
+    "mean": 1.019
   }
 }

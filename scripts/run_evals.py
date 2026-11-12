@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthetic policy evaluation benchmark (50 attacks + 50 legitimate carts).
+"""Synthetic policy evaluation benchmark (8 attack kinds / 50 variants + 50 varied legitimate carts).
 
 Runs offline against an isolated disposable PostgreSQL schema without calling PayPal or any LLM.
 Never touches development or demo schemas/tables.
@@ -26,6 +26,7 @@ os.environ["PAYPAL_CLIENT_ID"] = ""
 os.environ["PAYPAL_CLIENT_SECRET"] = ""
 
 from mandate import models  # noqa: E402
+from mandate.audit import digest  # noqa: E402
 from mandate.catalog import quote  # noqa: E402
 from mandate.db import Base  # noqa: E402
 from mandate.models import Mandate, Session as DBSessionModel, now  # noqa: E402
@@ -47,7 +48,7 @@ def wilson_interval(successes: int, total: int, z: float = 1.96) -> dict[str, fl
     }
 
 
-def _make_grant(db, owner_id: str, *, budget_cents=200000, per_transaction_cents=50000, constraints=None):
+def _make_grant(db, owner_id: str, *, budget_cents=500000, per_transaction_cents=100000, constraints=None):
     grant = Mandate(
         session_id=owner_id,
         status="ACTIVE",
@@ -58,7 +59,7 @@ def _make_grant(db, owner_id: str, *, budget_cents=200000, per_transaction_cents
         constraints=constraints if constraints is not None else {"width_cm": 160},
         instruction="Synthetic eval grant",
         expires_at=now() + timedelta(hours=2),
-        velocity_limit=100,
+        velocity_limit=200,
     )
     db.add(grant)
     db.flush()
@@ -69,27 +70,29 @@ def build_scenarios():
     attacks = []
     for i in range(8):
         attacks.append({
-            "scenario": f"over_budget_{i + 1}", "category": "over_budget",
-            "grant_budget": 30000, "grant_cap": 50000, "product_id": "desk-160", "quantity": 1,
+            "scenario": f"over_budget_{i + 1}", "kind": "over_budget",
+            "grant_budget": 30000 + i * 500, "grant_cap": 60000,
+            "items": [("desk-160", 1)],
         })
     for i in range(8):
         attacks.append({
-            "scenario": f"over_cap_{i + 1}", "category": "over_cap",
-            "grant_budget": 200000, "grant_cap": 30000, "product_id": "desk-160", "quantity": 1,
+            "scenario": f"over_cap_{i + 1}", "kind": "over_cap",
+            "grant_budget": 200000, "grant_cap": 30000 - i * 500,
+            "items": [("desk-160", 1)],
         })
     for i in range(8):
         attacks.append({
-            "scenario": f"off_list_merchant_{i + 1}", "category": "off_list_merchant",
+            "scenario": f"off_list_merchant_{i + 1}", "kind": "off_list_merchant",
             "custom_cart": {
-                "items": [{"id": "keyboard", "product_id": "keyboard", "name": "Mechanical keyboard",
+                "items": [{"id": "mouse-ergonomic", "product_id": "mouse-ergonomic", "name": "Ergonomic vertical mouse",
                            "merchant_id": f"rogue-vendor-{i}", "category": "electronics",
-                           "unit_price_cents": 8900, "currency": "USD", "attributes": {}, "recurring": False, "quantity": 1}],
-                "total_cents": 8900, "currency": "USD", "merchant_id": f"rogue-vendor-{i}", "fees_cents": 0,
+                           "unit_price_cents": 4500, "currency": "USD", "attributes": {}, "recurring": False, "quantity": i + 1}],
+                "total_cents": 4500 * (i + 1), "currency": "USD", "merchant_id": f"rogue-vendor-{i}", "fees_cents": 0,
             },
         })
     for i in range(6):
         attacks.append({
-            "scenario": f"lookalike_merchant_{i + 1}", "category": "lookalike_merchant",
+            "scenario": f"lookalike_merchant_{i + 1}", "kind": "lookalike_merchant",
             "custom_cart": {
                 "items": [{"id": "keyboard", "product_id": "keyboard", "name": "Mechanical keyboard",
                            "merchant_id": f"demo-merchant-official-{i}", "category": "electronics",
@@ -99,55 +102,73 @@ def build_scenarios():
         })
     for i in range(5):
         attacks.append({
-            "scenario": f"mislabeled_category_{i + 1}", "category": "mislabeled_category",
+            "scenario": f"mislabeled_category_{i + 1}", "kind": "mislabeled_category",
             "custom_cart": {
                 "items": [{"id": f"gift-card-{i}", "product_id": f"gift-card-{i}", "name": "Digital Gift Card",
                            "merchant_id": "demo-merchant", "category": "gift_cards",
-                           "unit_price_cents": 5000, "currency": "USD", "attributes": {}, "recurring": False, "quantity": 1}],
-                "total_cents": 5000, "currency": "USD", "merchant_id": "demo-merchant", "fees_cents": 0,
+                           "unit_price_cents": 5000, "currency": "USD", "attributes": {}, "recurring": False, "quantity": i + 1}],
+                "total_cents": 5000 * (i + 1), "currency": "USD", "merchant_id": "demo-merchant", "fees_cents": 0,
             },
         })
     for i in range(5):
         attacks.append({
-            "scenario": f"inflated_price_{i + 1}", "category": "inflated_price",
-            "product_id": "keyboard", "quantity": 1, "claimed_total_cents": 12000 + i * 500,
+            "scenario": f"inflated_price_{i + 1}", "kind": "inflated_price",
+            "items": [("keyboard", 1)], "claimed_total_cents": 12000 + i * 500,
         })
     for i in range(5):
         attacks.append({
-            "scenario": f"currency_swap_{i + 1}", "category": "currency_swap",
-            "product_id": "keyboard", "quantity": 1, "currency": "EUR",
+            "scenario": f"currency_swap_{i + 1}", "kind": "currency_swap",
+            "items": [("mouse-ergonomic", i + 1)], "currency": "EUR",
         })
     for i in range(5):
         attacks.append({
-            "scenario": f"subscription_upsell_{i + 1}", "category": "subscription_upsell",
-            "product_id": "subscription", "quantity": 1,
+            "scenario": f"subscription_upsell_{i + 1}", "kind": "subscription_upsell",
+            "items": [("subscription", i + 1)],
         })
     assert len(attacks) == 50
 
+    # Build 50 varied legitimate carts (every cart has unique items/quantities/total so P11 duplicate never fires artificially).
     legitimate = []
-    for i in range(25):
+    # 1..15: mouse-ergonomic (qty 1..15, totals $45..$675) under cap=$1,000 -> APPROVE
+    for qty in range(1, 16):
         legitimate.append({
-            "scenario": f"legit_keyboard_{i + 1}", "product_id": "keyboard", "quantity": 1,
-            "grant_budget": 200000, "grant_cap": 50000, "constraints": {},
-            "note": "Approved electronics within budget and below 80% cap",
+            "scenario": f"legit_mice_qty_{qty}",
+            "items": [("mouse-ergonomic", qty)],
+            "grant_budget": 500000, "grant_cap": 100000, "constraints": {},
         })
-    for i in range(15):
+    # 16..24: keyboard (qty 1..9, totals $89..$801) under cap=$1,100 -> APPROVE
+    for qty in range(1, 10):
         legitimate.append({
-            "scenario": f"legit_desk_160_{i + 1}", "product_id": "desk-160", "quantity": 1,
-            "grant_budget": 200000, "grant_cap": 50000, "constraints": {"width_cm": 160},
-            "note": "Approved 160 cm desk matching constraint and <= 80% of $500 cap",
+            "scenario": f"legit_keyboards_qty_{qty}",
+            "items": [("keyboard", qty)],
+            "grant_budget": 500000, "grant_cap": 110000, "constraints": {},
         })
-    for i in range(5):
+    # 25..40: combinations of keyboard (1..4) + mouse-ergonomic (1..4) (16 unique bundles) -> APPROVE
+    for k_qty in range(1, 5):
+        for m_qty in range(1, 5):
+            legitimate.append({
+                "scenario": f"legit_bundle_k{k_qty}_m{m_qty}",
+                "items": [("keyboard", k_qty), ("mouse-ergonomic", m_qty)],
+                "grant_budget": 500000, "grant_cap": 100000, "constraints": {},
+            })
+    # 41..45: 5 unique desk-unknown + mouse bundles (qty 0..4) against width_cm=160 -> ESCALATE (P09 missing width_cm)
+    for m_qty in range(5):
+        items = [("desk-unknown", 1)] + ([("mouse-ergonomic", m_qty)] if m_qty > 0 else [])
         legitimate.append({
-            "scenario": f"legit_desk_missing_width_{i + 1}", "product_id": "desk-unknown", "quantity": 1,
-            "grant_budget": 200000, "grant_cap": 50000, "constraints": {"width_cm": 160},
-            "note": "Missing width_cm attribute on catalog item triggers P09 human review",
+            "scenario": f"legit_desk_unknown_m{m_qty}",
+            "items": items,
+            "grant_budget": 500000, "grant_cap": 100000, "constraints": {"width_cm": 160},
         })
-    for i in range(5):
+    # 46..50: 5 unique desk-160 + mouse bundles (qty 0..4) near cap ($349..$529 vs cap $400/$550 > 80%) -> ESCALATE (P11 > 80% cap)
+    for m_qty in range(5):
+        items = [("desk-160", 1)] + ([("mouse-ergonomic", m_qty)] if m_qty > 0 else [])
+        total = 34900 + m_qty * 4500
+        # Cap is slightly above total (so P03 passes) while total > 80% of cap (so P11 escalates).
+        cap = total + 1000
         legitimate.append({
-            "scenario": f"legit_desk_near_cap_{i + 1}", "product_id": "desk-160", "quantity": 1,
-            "grant_budget": 200000, "grant_cap": 40000, "constraints": {"width_cm": 160},
-            "note": "$349 exceeds 80% of $400 cap ($320), triggering P11 human review",
+            "scenario": f"legit_desk_160_near_cap_m{m_qty}",
+            "items": items,
+            "grant_budget": 500000, "grant_cap": cap, "constraints": {"width_cm": 160},
         })
     assert len(legitimate) == 50
     return attacks, legitimate
@@ -168,6 +189,7 @@ def main():
 
     try:
         attacks, legitimate = build_scenarios()
+        attack_kinds = sorted({a["kind"] for a in attacks})
         latencies_ms: list[float] = []
         attacks_blocked = 0
         attacks_breached = 0
@@ -175,6 +197,7 @@ def main():
         legit_approved = 0
         legit_escalated = 0
         escalated_details = []
+        seen_legit_hashes = set()
 
         with factory() as db, db.begin():
             owner = DBSessionModel(csrf_token="eval-csrf")
@@ -193,7 +216,7 @@ def main():
                     cart, missing = atk["custom_cart"], []
                 else:
                     cart, missing = quote(
-                        [ItemInput(product_id=atk["product_id"], quantity=atk["quantity"])],
+                        [ItemInput(product_id=pid, quantity=qty) for pid, qty in atk["items"]],
                         atk.get("currency", "USD"),
                     )
                 t0 = time.perf_counter()
@@ -213,7 +236,13 @@ def main():
                     per_transaction_cents=leg["grant_cap"],
                     constraints=leg["constraints"],
                 )
-                cart, missing = quote([ItemInput(product_id=leg["product_id"], quantity=leg["quantity"])], "USD")
+                cart, missing = quote(
+                    [ItemInput(product_id=pid, quantity=qty) for pid, qty in leg["items"]],
+                    "USD",
+                )
+                cart_hash = digest(cart)
+                assert cart_hash not in seen_legit_hashes, f"Duplicate legitimate cart generated for {leg['scenario']}"
+                seen_legit_hashes.add(cart_hash)
                 t0 = time.perf_counter()
                 decision, rules = evaluate(db, grant, cart, missing)
                 latencies_ms.append((time.perf_counter() - t0) * 1000.0)
@@ -225,7 +254,12 @@ def main():
                 else:
                     legit_escalated += 1
                     reasons = [f"{r['id']}: {r['message']}" for r in rules if r["status"] == "ESCALATE"]
-                    escalated_details.append({"scenario": leg["scenario"], "product_id": leg["product_id"], "reasons": reasons})
+                    escalated_details.append({
+                        "scenario": leg["scenario"],
+                        "product_id": ", ".join(f"{pid}x{qty}" for pid, qty in leg["items"]),
+                        "total_cents": cart["total_cents"],
+                        "reasons": reasons,
+                    })
 
         latencies_ms.sort()
         p50 = latencies_ms[len(latencies_ms) // 2]
@@ -237,6 +271,8 @@ def main():
         results = {
             "label": "Synthetic: scripted scenarios written by the author",
             "benchmark_date": now().isoformat(),
+            "attack_kinds": attack_kinds,
+            "attack_coverage": f"{len(attack_kinds)} attack kinds, {len(attacks)} variants",
             "sample_size": {
                 "total_evaluations": len(attacks) + len(legitimate),
                 "attack_scenarios": len(attacks),
@@ -271,6 +307,7 @@ def main():
         out_path.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
 
         print(results["label"])
+        print(results["attack_coverage"] + ":", ", ".join(attack_kinds))
         print(results["summary"]["attacks_blocked"])
         print(results["summary"]["false_positives"])
         print(results["summary"]["escalate_on_legitimate"])
@@ -285,4 +322,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

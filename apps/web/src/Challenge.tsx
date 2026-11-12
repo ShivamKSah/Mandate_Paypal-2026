@@ -175,6 +175,12 @@ export function Challenge({
 
         {evals ? (
           <>
+            {evals.attack_coverage && (
+              <p className="eval-coverage">
+                <strong>{evals.attack_coverage}:</strong>{" "}
+                {evals.attack_kinds.join(", ")}
+              </p>
+            )}
             <div className="eval-metrics">
               <div className="eval-stat">
                 <span>Attacks blocked (N={evals.sample_size.attack_scenarios})</span>

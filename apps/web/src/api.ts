@@ -192,6 +192,8 @@ export const ChallengeStatsSchema = z.object({
 export const EvalResultsSchema = z.object({
   label: z.string(),
   benchmark_date: z.string(),
+  attack_kinds: z.array(z.string()).default([]),
+  attack_coverage: z.string().optional(),
   sample_size: z.object({
     total_evaluations: z.number().int(),
     attack_scenarios: z.number().int(),

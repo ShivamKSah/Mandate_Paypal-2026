@@ -279,6 +279,8 @@ test("challenge stats and synthetic evaluation schemas enforce exact fields", ()
     EvalResultsSchema.safeParse({
       label: "Synthetic: scripted scenarios written by the author",
       benchmark_date: "2026-11-12T00:00:00Z",
+      attack_kinds: ["over_budget", "over_cap"],
+      attack_coverage: "2 attack kinds, 2 variants",
       sample_size: {
         total_evaluations: 100,
         attack_scenarios: 50,

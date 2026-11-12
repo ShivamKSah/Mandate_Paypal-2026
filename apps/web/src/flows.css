@@ -836,6 +836,11 @@
 .eval-panel {
   margin-top: 16px;
 }
+.eval-coverage {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
 .synthetic-badge {
   display: inline-flex;
   align-items: center;
