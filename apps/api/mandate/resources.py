@@ -15,7 +15,7 @@ from .models import AuditEvent, Mandate, Operation, Payment, Proposal, now
 from .payments.paypal import PayPalClient, PayPalError, error_diagnostic_fields, provider_failure_message
 from .schemas import GrantCompleteInput, MandateInput
 from .security import human, owned
-from .settlement import approval_link
+from .settlement import approval_link, payee_mismatch_detail, payee_mismatch_info
 from .vault import VaultConfigError, encrypt_vault_token, mask_token, vault_key_configured
 
 router = APIRouter(prefix="/api")
@@ -57,16 +57,6 @@ def _extract_capture_id(payload):
                 if isinstance(capture, dict) and isinstance(capture.get("id"), str) and capture["id"]:
                     return capture["id"]
     return None
-
-
-def _setup_payee_mismatch(payload):
-    expected = (os.getenv("PAYPAL_MERCHANT_ID") or "").strip()
-    units = payload.get("purchase_units") if isinstance(payload, dict) else None
-    if not expected or not isinstance(units, list) or not units or not isinstance(units[0], dict):
-        return False
-    payee = units[0].get("payee")
-    actual = payee.get("merchant_id") if isinstance(payee, dict) else None
-    return isinstance(actual, str) and actual.strip() != expected
 
 
 @router.post("/mandates")
@@ -195,7 +185,8 @@ async def grant_complete(
                     "Could not capture the $1.00 vault setup order; confirm buyer approval in PayPal",
                 ),
             ) from None
-        if _setup_payee_mismatch(result):
+        mismatched, expected_masked, actual_masked = payee_mismatch_info(result)
+        if mismatched:
             grant.vault_status = "FAILED"
             err = PayPalError("Vault setup order payee mismatch", code="PAYEE_MISMATCH")
             append(db, owner, "GRANT_FAILED", grant.id, {
@@ -203,11 +194,16 @@ async def grant_complete(
                 "phase": "payee_verification",
                 "code": err.code,
                 "reason": "payee_mismatch",
+                "expected_merchant": expected_masked,
+                "actual_merchant": actual_masked,
             })
             db.commit()
             raise HTTPException(
                 502,
-                provider_failure_message(err, "Vault setup order payee does not match configured PAYPAL_MERCHANT_ID"),
+                provider_failure_message(
+                    err,
+                    payee_mismatch_detail(expected_masked, actual_masked, "Vault setup order"),
+                ),
             )
         vault_id, vault_state = _extract_vault_info(result)
         capture_id = _extract_capture_id(result)
@@ -223,7 +219,8 @@ async def grant_complete(
             except PayPalError as error:
                 last_poll_error = error
                 continue
-            if _setup_payee_mismatch(polled):
+            mismatched, expected_masked, actual_masked = payee_mismatch_info(polled)
+            if mismatched:
                 grant.vault_status = "FAILED"
                 err = PayPalError("Vault setup order payee mismatch", code="PAYEE_MISMATCH")
                 append(db, owner, "GRANT_FAILED", grant.id, {
@@ -231,11 +228,16 @@ async def grant_complete(
                     "phase": "payee_verification",
                     "code": err.code,
                     "reason": "payee_mismatch",
+                    "expected_merchant": expected_masked,
+                    "actual_merchant": actual_masked,
                 })
                 db.commit()
                 raise HTTPException(
                     502,
-                    provider_failure_message(err, "Vault setup order payee does not match configured PAYPAL_MERCHANT_ID"),
+                    provider_failure_message(
+                        err,
+                        payee_mismatch_detail(expected_masked, actual_masked, "Vault setup order"),
+                    ),
                 )
             polled_id, polled_state = _extract_vault_info(polled)
             if polled_id:

@@ -4,7 +4,30 @@ from urllib.parse import urlsplit
 from sqlalchemy import select
 
 from .audit import append, digest
+from .config import mask_merchant_id, normalize_merchant_id
 from .models import Case, Mandate, Operation, Payment, Proposal, Session
+
+
+def payee_mismatch_info(payload) -> tuple[bool, str, str]:
+    """Check whether purchase_units[0].payee.merchant_id mismatches configured PAYPAL_MERCHANT_ID."""
+    expected = normalize_merchant_id(os.getenv("PAYPAL_MERCHANT_ID"))
+    units = payload.get("purchase_units") if isinstance(payload, dict) else None
+    if not expected or not isinstance(units, list) or not units or not isinstance(units[0], dict):
+        return False, mask_merchant_id(expected), "(missing)"
+    payee = units[0].get("payee")
+    actual = normalize_merchant_id(payee.get("merchant_id") if isinstance(payee, dict) else None)
+    if not actual:
+        return False, mask_merchant_id(expected), "(missing)"
+    return actual != expected, mask_merchant_id(expected), mask_merchant_id(actual)
+
+
+def payee_mismatch_detail(expected_masked: str, actual_masked: str, context: str = "PayPal order") -> str:
+    return (
+        f"{context} payee does not match configured PAYPAL_MERCHANT_ID "
+        f"(expected={expected_masked}, actual={actual_masked}). "
+        f"Update PAYPAL_MERCHANT_ID in .env to match PayPal's Sandbox Business account ({actual_masked}), "
+        f"or use PAYPAL_CLIENT_ID/PAYPAL_CLIENT_SECRET owned by {expected_masked}"
+    )
 
 
 def lock_payment(db, payment_id):
@@ -50,7 +73,7 @@ def settle_order(db, operation_id, result):
             return False
         payee, amount = units[0].get("payee"), units[0].get("amount")
         expected = f"{payment.amount_cents // 100}.{payment.amount_cents % 100:02d}"
-        if (not isinstance(payee, dict) or str(payee.get("merchant_id") or "").strip() != (os.getenv("PAYPAL_MERCHANT_ID") or "").strip()
+        if (not isinstance(payee, dict) or normalize_merchant_id(payee.get("merchant_id")) != normalize_merchant_id(os.getenv("PAYPAL_MERCHANT_ID"))
                 or not isinstance(amount, dict) or amount.get("currency_code") != "USD" or amount.get("value") != expected):
             return False
     if operation.status == "COMPLETED":
@@ -73,7 +96,7 @@ def capture_from_order(result, payment):
     if not isinstance(units, list) or len(units) != 1 or not isinstance(units[0], dict):
         return None
     payee, payments = units[0].get("payee", {}), units[0].get("payments", {})
-    if not isinstance(payee, dict) or str(payee.get("merchant_id") or "").strip() != (os.getenv("PAYPAL_MERCHANT_ID") or "").strip() or not isinstance(payments, dict):
+    if not isinstance(payee, dict) or normalize_merchant_id(payee.get("merchant_id")) != normalize_merchant_id(os.getenv("PAYPAL_MERCHANT_ID")) or not isinstance(payments, dict):
         return None
     captures = payments.get("captures", [])
     if not isinstance(captures, list) or len(captures) != 1 or not isinstance(captures[0], dict):
