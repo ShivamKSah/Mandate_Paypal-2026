@@ -730,6 +730,9 @@
 .flow-step:hover {
   background: rgba(255, 255, 255, 0.55);
 }
+:root[data-theme="dark"] .flow-step:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
 .flow-step.current {
   border-color: var(--line);
   background: var(--white);
@@ -1054,6 +1057,13 @@
 .guided-step.done {
   border-color: #bbf7d0;
   background: #f0fdf4;
+}
+:root[data-theme="dark"] .guided-step.done {
+  border-color: rgba(74, 222, 128, 0.32);
+  background: rgba(34, 197, 94, 0.09);
+}
+:root[data-theme="dark"] .suggestion-box {
+  border-color: rgba(96, 165, 250, 0.3);
 }
 .guided-step-info {
   display: flex;

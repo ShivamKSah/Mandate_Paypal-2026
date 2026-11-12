@@ -34,7 +34,7 @@
     padding: 8px 8px max(10px, env(safe-area-inset-bottom));
     border-right: 0;
     border-top: 1px solid var(--line);
-    background: #fffffff5;
+    background: var(--white);
     backdrop-filter: blur(16px);
     display: block;
   }

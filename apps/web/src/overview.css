@@ -152,6 +152,12 @@
   margin-inline: 4%;
   background: var(--accent-soft);
 }
+:root[data-theme="dark"] .grant-card-peek,
+:root[data-theme="dark"] .grant-card-backing,
+:root[data-theme="dark"] .grant-card-backing::after {
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+}
 .grant-card-backing::after {
   content: "";
   position: absolute;

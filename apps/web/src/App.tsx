@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { api } from "./api";
 import {
@@ -9,9 +9,11 @@ import {
   BadgeCheck,
   CircleAlert,
   FileClock,
+  Moon,
   RotateCcw,
   ShieldAlert,
   ShoppingBag,
+  Sun,
   WalletCards,
 } from "lucide-react";
 import { activeGrants, type View } from "./domain";
@@ -59,6 +61,23 @@ export default function App() {
     callback ? "payments" : "overview",
   );
   const [selectedGrantId, setSelectedGrantId] = useState("");
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    try {
+      const saved = localStorage.getItem("mandate.theme");
+      if (saved === "dark" || saved === "light") return saved;
+    } catch {
+      /* ignore storage errors */
+    }
+    return "light";
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("mandate.theme", theme);
+    } catch {
+      /* ignore storage errors */
+    }
+  }, [theme]);
   const [agentFallbackRun, setAgentFallbackRun] = useState<{
     planner: string;
     summary: string;
@@ -208,6 +227,15 @@ export default function App() {
                   ? "Protected workspace"
                   : "Local workspace"}
             </span>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
+            >
+              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
             <button
               className="icon-button"
               aria-label="Refresh data"
