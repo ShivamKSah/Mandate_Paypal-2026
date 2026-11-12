@@ -6,7 +6,10 @@ import pytest
 
 from mandate.catalog import quote
 from mandate.channel3 import lookup_channel3_item, search_channel3
+from mandate.db import get_db
 from mandate.main import app
+from mandate.models import Mandate, Session, now
+from mandate.policy import evaluate
 from mandate.zapier import get_zapier_webhook_url, mask_url, send_zapier_event
 
 
@@ -83,3 +86,70 @@ def test_integrations_api_status_and_search(client: TestClient):
     zapier_res = client.post("/api/integrations/zapier/test", json={"webhook_url": "https://hooks.zapier.com/hooks/catch/fake/123"})
     assert zapier_res.status_code == 200
     assert zapier_res.json()["dispatched"] is True
+
+
+def test_channel3_non_allowlisted_merchant_denied_by_p04(database):
+    """Channel3 items from outside the grant's allowed_merchants must be DENIED by P04."""
+    # c3-chair-ergonomic has merchant_id="herman-miller"
+    cart, missing = quote([MockItem("c3-chair-ergonomic", 1)], "USD")
+    assert len(missing) == 0
+
+    with database() as db:
+        from datetime import timedelta
+        sess = Session(csrf_token="test_csrf_token_p04")
+        db.add(sess)
+        db.flush()
+
+        grant = Mandate(
+            session_id=sess.id,
+            budget_cents=200000,
+            per_transaction_cents=200000,
+            allowed_categories=["furniture"],
+            allowed_merchants=["demo-merchant"],  # herman-miller is not allowlisted
+            constraints={},
+            instruction="Buy furniture",
+            expires_at=now() + timedelta(hours=1),
+            velocity_limit=10,
+        )
+        db.add(grant)
+        db.flush()
+
+        decision, rules = evaluate(db, grant, cart, missing)
+        assert decision == "DENY"
+        p04 = next(r for r in rules if r["id"] == "P04")
+        assert p04["status"] == "DENY"
+
+
+def test_channel3_missing_attribute_escalates_p09(database):
+    """Channel3 item missing required grant constraint attributes must ESCALATE under P09."""
+    # c3-light-screenbar has attributes {"auto_dimming": True}, lacks width_cm
+    # Use demo-merchant so P04 passes
+    cart, missing = quote([MockItem("c3-light-screenbar", 1)], "USD")
+    assert len(missing) == 0
+
+    with database() as db:
+        from datetime import timedelta
+        sess = Session(csrf_token="test_csrf_token_p09")
+        db.add(sess)
+        db.flush()
+
+        grant = Mandate(
+            session_id=sess.id,
+            budget_cents=50000,
+            per_transaction_cents=50000,
+            allowed_categories=["electronics"],
+            allowed_merchants=["demo-merchant"],
+            constraints={"width_cm": 160},  # screenbar does not have width_cm
+            instruction="Buy 160 cm electronics",
+            expires_at=now() + timedelta(hours=1),
+            velocity_limit=10,
+        )
+        db.add(grant)
+        db.flush()
+
+        decision, rules = evaluate(db, grant, cart, missing)
+        assert decision == "ESCALATE"
+        p09 = next(r for r in rules if r["id"] == "P09")
+        assert p09["status"] == "ESCALATE"
+        assert "Missing" in p09["message"]
+

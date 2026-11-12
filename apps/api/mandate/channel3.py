@@ -9,7 +9,7 @@ logger = logging.getLogger("mandate.channel3")
 
 CHANNEL3_BASE_URL = "https://api.channel3.tv/v1"
 
-# Curated fallback product items from 25,000+ retailers normalized to Channel3 schema
+# Curated fallback product items normalized to Channel3 schema
 CHANNEL3_FALLBACK_CATALOG: list[dict[str, Any]] = [
     {
         "id": "c3-chair-ergonomic",
@@ -20,6 +20,7 @@ CHANNEL3_FALLBACK_CATALOG: list[dict[str, Any]] = [
         "unit_price_cents": 129500,
         "currency": "USD",
         "attributes": {"ergonomic": True, "material": "mesh"},
+        "recurring": False,
         "description": "Premium ergonomic office seating with PostureFit SL lumbar support.",
     },
     {
@@ -31,6 +32,7 @@ CHANNEL3_FALLBACK_CATALOG: list[dict[str, Any]] = [
         "unit_price_cents": 39900,
         "currency": "USD",
         "attributes": {"ports": 18, "charging_w": 98},
+        "recurring": False,
         "description": "18-port Thunderbolt 4 hub for pro workstations and multi-monitor setups.",
     },
     {
@@ -42,6 +44,7 @@ CHANNEL3_FALLBACK_CATALOG: list[dict[str, Any]] = [
         "unit_price_cents": 9900,
         "currency": "USD",
         "attributes": {"ergonomic": True, "connectivity": "wireless"},
+        "recurring": False,
         "description": "Quiet click 8K DPI high precision ergonomic performance mouse.",
     },
     {
@@ -53,6 +56,7 @@ CHANNEL3_FALLBACK_CATALOG: list[dict[str, Any]] = [
         "unit_price_cents": 68900,
         "currency": "USD",
         "attributes": {"width_cm": 180, "electric": True},
+        "recurring": False,
         "description": "Dual-motor motorized sit-stand desk with 355 lb lifting capacity.",
     },
     {
@@ -64,6 +68,7 @@ CHANNEL3_FALLBACK_CATALOG: list[dict[str, Any]] = [
         "unit_price_cents": 13900,
         "currency": "USD",
         "attributes": {"auto_dimming": True},
+        "recurring": False,
         "description": "Eye-care asymmetric optical design desktop monitor bar light.",
     },
 ]
@@ -108,6 +113,7 @@ def search_channel3(query: str, limit: int = 5) -> list[dict[str, Any]]:
                             "unit_price_cents": price,
                             "currency": item.get("currency", "USD"),
                             "attributes": item.get("attributes") or {},
+                            "recurring": False,
                             "description": item.get("description", "Product retrieved via Channel3 API"),
                             "source": "channel3-live",
                         })

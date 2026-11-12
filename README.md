@@ -13,21 +13,22 @@ Mandate is a bounded-authority AI shopping and payment-control system built with
   - SHA-256 hash-chained audit ledger verified valid across `10` events.
 
 ### Verified by Automated Offline Tests
-- **201 backend tests passed** (`pytest apps/api/tests -q --tb=short`, loopback-only socket guard `127.0.0.1,::1`, mocked PayPal/Groq HTTP transports, PostgreSQL 17 disposable schemas):
-  - Hypothesis property tests (`@seed(42)`), 15 Break-the-Mandate attack simulations (`0` breaches, `0` payment rows created), Fernet vault grant/charge/reconciliation mocks, `PAYMENT.CAPTURE.REFUNDED` + `PAYMENT.CAPTURE.COMPLETED` webhook signature/authoritative-`GET` mocks, LLM retry/backoff/fallback mocks, instruction constraint extraction (`ESCALATE`-only in `P09`), `PUBLIC_DEMO` isolation/rate-limits, offline `scripts/predeploy_check.py`, and `scripts/discover_merchant.py`.
-- **14+ frontend boundary tests passed** (`npm test`), plus TypeScript typecheck (`tsc -b`) and Vite production build (`vite build`).
+- **210 backend tests passed** (`pytest apps/api/tests -q --tb=short`, loopback-only socket guard `127.0.0.1,::1`, mocked PayPal/Groq HTTP transports, PostgreSQL 17 disposable schemas):
+  - Hypothesis property tests (`@seed(42)`), 15 Break-the-Mandate attack simulations (`0` breaches, `0` payment rows created), Fernet vault grant/charge/reconciliation mocks, `PAYMENT.CAPTURE.REFUNDED` + `PAYMENT.CAPTURE.COMPLETED` webhook signature/authoritative-`GET` mocks, LLM retry/backoff/fallback mocks, instruction constraint extraction (`ESCALATE`-only in `P09`), `PUBLIC_DEMO` isolation/rate-limits, offline `scripts/predeploy_check.py`, `scripts/discover_merchant.py`, Zapier webhook dispatch mocks, and Channel3 allowlist/constraint mocks.
+- **15 frontend boundary tests passed** (`npm.cmd --prefix apps/web test`), plus TypeScript typecheck (`tsc -b`) and Vite production build (`vite build`).
 - **Synthetic 100-scenario evaluation passed** (`scripts/run_evals.py` -> [eval_results.json](eval_results.json), labeled *Synthetic: scripted scenarios written by the author*): **`8 attack kinds, 50 variants`** with **`50 of 50 blocked (95% CI 92.86-100.0%)`**, **`0 of 50 false positives (95% CI 0.0-7.14%)`**, **`10 of 50 escalated (95% CI 11.24-33.04%)`** on legitimate carts, `p50=0.918 ms`, `p95=1.311 ms`.
 
 ### Still Unverified in External Environments
 - Signed PayPal webhook delivery (`PAYMENT.CAPTURE.COMPLETED` and `PAYMENT.CAPTURE.REFUNDED`) over a public HTTPS URL.
 - Live hosted Render deployment (`render.yaml`) and Docker Compose execution (`compose.production.yaml`).
 - Live GroqCloud API tool-calling response (`scripts/check_llm.py` — placeholder: `<TODO: run scripts/check_llm.py and paste timestamp/model>`).
+- Live Channel3 API product search response (`scripts/check_channel3.py` — operator-run check with optional key).
 
 ## Demo Defaults and What Is Real vs. Mocked
 
 - **Demo defaults**: **$500.00 budget**, **$400.00 per-purchase cap**, allowed merchant **`demo-merchant`**, allowed categories **`office_furniture` (`furniture` in catalog) and `electronics`**.
-- **What is real**: FastAPI backend, PostgreSQL 17 persistence and row-locked atomic reservations (`spent_cents + reserved_cents <= budget_cents`), Alembic schema migrations (`0001`–`0004`), `P01`–`P11` policy engine, SHA-256 hash-chained audit ledger, CSRF + `HttpOnly`/`SameSite=Strict` sessions, DB-backed rate limits, Fernet encryption for `vault_token_ref`, durable `Operation` outbox + `ReconciliationLease` worker, 15 Break-the-Mandate attacks, and React dashboard.
-- **What is mocked in tests**: All 186 backend tests replace external PayPal and GroqCloud HTTP endpoints with `httpx.MockTransport` / fixture clients and enforce `pytest-socket --allow-hosts=127.0.0.1,::1` so no external network calls ever run during `pytest`. Real PayPal Sandbox and GroqCloud calls only execute when running the app or operator scripts (`scripts/live_vault_check.py`, `scripts/check_llm.py`) with real credentials.
+- **What is real**: FastAPI backend, PostgreSQL 17 persistence and row-locked atomic reservations (`spent_cents + reserved_cents <= budget_cents`), Alembic schema migrations (`0001_prototype`, `0002_hardening`, `0003_vault_grants`, `0004_challenge_attempts`), `P01`–`P11` policy engine, SHA-256 hash-chained audit ledger, CSRF + `HttpOnly`/`SameSite=Strict` sessions, DB-backed rate limits, Fernet encryption for `vault_token_ref`, durable `Operation` outbox + `ReconciliationLease` worker, 15 Break-the-Mandate attacks, and React dashboard.
+- **What is mocked in tests**: All 210 backend tests replace external PayPal and GroqCloud HTTP endpoints with `httpx.MockTransport` / fixture clients and enforce `pytest-socket --allow-hosts=127.0.0.1,::1` so no external network calls ever run during `pytest`. Real PayPal Sandbox and GroqCloud calls only execute when running the app or operator scripts (`scripts/live_vault_check.py`, `scripts/check_llm.py`) with real credentials.
 
 ## Try It as a Judge
 
@@ -75,15 +76,47 @@ flowchart LR
   PayPal -->|Signed Webhooks + Authoritative GET| Audit
 ```
 
+## Deterministic Policy Invariants (`P01`–`P11`)
+
+Every proposed cart is evaluated synchronously against the active grant parameters before any reservation or payment execution occurs (`apps/api/mandate/policy.py`).
+
+| Rule ID | Rule Name | What It Checks | Failure Action |
+| :--- | :--- | :--- | :---: |
+| **`P01`** | **Active authority** | Verifies `grant.status == "ACTIVE"` and `grant.expires_at > now()`. | `DENY` |
+| **`P02`** | **Budget** | Verifies canonical cart total plus spent and reserved funds fits the grant budget (`total + spent_cents + reserved_cents - reserved_credit <= budget_cents`). | `DENY` |
+| **`P03`** | **Transaction cap** | Verifies canonical cart total does not exceed the single-purchase transaction cap (`total <= per_transaction_cents`). | `DENY` |
+| **`P04`** | **Trusted merchant** | Verifies merchant is `demo-merchant` and is present in `grant.allowed_merchants` allowlist (`all(i["merchant_id"] == "demo-merchant" and i["merchant_id"] in grant.allowed_merchants for i in items)`). | `DENY` |
+| **`P05`** | **Category** | Verifies all cart item categories are present in `grant.allowed_categories` allowlist (`all(i["category"] in grant.allowed_categories for i in items)`). | `DENY` |
+| **`P06`** | **Exact quote** | Verifies all items exist in catalog, currency is USD, total > 0, quantity <= 100, and claimed total equals canonical total (`claimed_total is None or claimed_total == total`). | `DENY` |
+| **`P07`** | **Velocity** | Verifies hourly reserved/completed purchases are within velocity limit (`used < grant.velocity_limit`). | `DENY` |
+| **`P08`** | **Purchase identity** | Verifies purchase intent deduplication under row-level grant lock. | `PASS` (Deduplicated) |
+| **`P09`** | **Confirmed constraints** | Checks item attributes against grant constraints and natural language instruction constraints. Fails `DENY` on explicit mismatch against grant constraints; yields `ESCALATE` if required grant attributes are missing or if extracted instruction constraints require operator review. | `DENY` (mismatch) / `ESCALATE` (missing / unlisted attribute) |
+| **`P10`** | **Non-recurring** | Verifies no items in the cart are marked recurring (`recurring == True`). | `DENY` |
+| **`P11`** | **Additional review** | Flags duplicate cart submitted within 1 hour or total exceeding 80% of transaction cap (`total * 100 > grant.per_transaction_cents * 80 or duplicate`). | `ESCALATE` |
+
+### Cryptographic Cart-Hash Binding (Separate from P01–P11)
+- **`cart_hash`**: `cart_hash = digest(cart)` computes the SHA-256 digest over the canonical items, quantities, unit prices, and currency.
+- It binds the proposal, the atomic database reservation, the durable operation outbox record (`Operation.payload_hash`), and the PayPal order.
+- If a cart payload is modified after policy evaluation, the cryptographic hash binding rejects execution before any PayPal API call can be initiated.
+
+## Sponsor Technologies
+
+| Sponsor | Implementation & Role in Mandate | Status |
+| :--- | :--- | :--- |
+| **AG Grid** | Integrated via `ag-grid-react` & `ag-grid-community` into two screens: **Decision Ledger** (`/ledger`) and **Payments Queue** (`/payments`), providing interactive data grids with sorting, filtering, CSV export, and light/dark theme synchronization. | Integrated & verified in web build |
+| **Render** | Infrastructure-as-code Blueprint in [`render.yaml`](render.yaml) building Docker runtime with PostgreSQL, pre-deploy migrations, and health checks. | Blueprint ready; hosted URL pending deployment |
+| **Postman** | OpenAPI-derived 36-endpoint collection in [`docs/mandate.postman_collection.json`](docs/mandate.postman_collection.json) covering all REST routes and schemas. | Collection committed in repo; not published to Postman Network |
+| **Zapier** | Background webhook dispatcher ([`apps/api/mandate/zapier.py`](apps/api/mandate/zapier.py)) emitting events on policy evaluations, captures, and refunds. Test endpoint at `POST /api/integrations/zapier/test`. | Built & optional; active when `ZAPIER_WEBHOOK_URL` is set in `.env` |
+| **Channel3** | E-commerce product search adapter ([`apps/api/mandate/channel3.py`](apps/api/mandate/channel3.py)) with query search endpoint `GET /api/integrations/channel3/search`. When `CHANNEL3_API_KEY` is not set, uses curated fallback items. Items are strictly bounded by Mandate's merchant allowlist (`P04`) and budget limits. Default guided demo uses trusted local catalog. | Built & optional; active when `CHANNEL3_API_KEY` is set in `.env` |
+
 ## Tools Used
 
-- **Backend & Persistence**: Python 3.11+, FastAPI, SQLAlchemy, Alembic (`0001`–`0004`), PostgreSQL 17, `cryptography` (Fernet)
+- **Backend & Persistence**: Python 3.11+, FastAPI, SQLAlchemy, Alembic (`0001_prototype`, `0002_hardening`, `0003_vault_grants`, `0004_challenge_attempts`), PostgreSQL 17, `cryptography` (Fernet)
 - **Payments**: PayPal Sandbox REST API v2 (Orders, Vault `vault_id`, Refunds, Webhook Signature Verification)
 - **AI (Advisory / Proposal Only)**: GroqCloud (`openai/gpt-oss-20b` with labeled deterministic rules fallback)
-- **Frontend & Data Grids**: React 19, TypeScript 7, Vite 8, **AG Grid** (`ag-grid-react` & `ag-grid-community`, patterned after [`paypaldev/hackathon-paypal-ag-grid-boilerplate`](https://github.com/paypaldev/hackathon-paypal-ag-grid-boilerplate)), Zod, Lucide Icons
+- **Frontend & Data Grids**: React 19, TypeScript 7, Vite 8, **AG Grid** (`ag-grid-react` & `ag-grid-community`), Zod, Lucide Icons
 - **Deployment & Cloud (Sponsor)**: Render Blueprint ([render.yaml](render.yaml)) with Docker runtime, pre-deploy migrations, and health checks
 - **Testing & Verification**: `pytest`, `pytest-socket` (loopback-only offline guard), `httpx.MockTransport`, Hypothesis (`@seed(42)`), Node test runner
-- **Sponsor Partner Integrations**: **AG Grid** (interactive analytics), **Render** (cloud deployment), **Postman** (OpenAPI collection), **Zapier** (webhook automations for policy & payment events), **Channel3** (e-commerce catalog search across 25,000+ retailers)
 - **API & Integration Artifacts**: [docs/mandate.postman_collection.json](docs/mandate.postman_collection.json) (36 endpoints generated from FastAPI OpenAPI) and [examples/guarded_agent.py](examples/guarded_agent.py) (minimal external agent proposal example)
 
 ## Run Locally

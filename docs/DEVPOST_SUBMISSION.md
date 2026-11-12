@@ -6,14 +6,14 @@ AI shopping agents are starting to browse stores, fill carts, and click checkout
 Mandate separates **shopping intent** from **payment authority**. An AI agent can propose a cart, but deterministic server-side policy rules decide whether money can move—and every dollar is bounded by a time-limited, category-restricted, merchant-allowlisted spending grant.
 
 ## What It Does
-1. **Spending Grants & Vault Autonomy**: A human sets a spending grant (e.g., `$500.00` budget, `$400.00` per-purchase cap, `demo-merchant`, `furniture` and `electronics`, `width_cm: 160`, 60-minute expiry). The user can either approve each purchase in PayPal or complete a one-time `$1.00` PayPal Vault setup (immediately auto-refunded) so future policy-approved purchases execute autonomously via `vault_id`.
-2. **Deterministic Policy Gate (`P01`–`P11`) & `cart_hash` Binding**: Every proposal is re-priced from a trusted server catalog and evaluated against 11 deterministic rules (lifecycle, budget, cap, merchant, category, canonical total/currency, velocity, recurring/subscription block, attribute ambiguity `ESCALATE` gate, and duplicate/near-cap escalation). Approved carts reserve integer-cent funds atomically in PostgreSQL.
-3. **Break the Mandate (Adversarial Testing)**: 15 scripted attacks (budget/cap overflow, lookalike/off-list merchants, mislabeled gift cards, inflated prices, currency swaps, velocity bursts, duplicate replays, subscriptions, post-approval cart swaps) prove zero breaches and zero PayPal calls when blocked.
-4. **Durable Execution, Reconciliation & Bounded Recovery**: Every PayPal mutation writes a durable `Operation` outbox row before calling PayPal with a stable `PayPal-Request-Id`. Ambiguous timeouts/5xx hold the reservation in `UNKNOWN` until the background lease worker resolves it via `GET` order lookup. When something goes wrong after capture, a human opens a recovery case with evidence and economics to issue a bounded partial refund.
+1. **Spending Grants & Vault Autonomy**: A human sets a spending grant (`Mandate.per_transaction_cents`, `Mandate.vault_status`, e.g., `$500.00` budget, `$400.00` per-purchase cap, `demo-merchant`, `furniture` and `electronics`, `width_cm: 160`, 60-minute expiry; session TTL 8h). The user can either approve each purchase in PayPal or complete a one-time `$1.00` PayPal Vault setup (immediately auto-refunded) so future policy-approved purchases execute autonomously via `vault_id`.
+2. **Deterministic Policy Gate (`P01`–`P11`) & `cart_hash` Binding**: Every proposal is re-priced from a trusted server catalog and evaluated against 11 deterministic rules (quote TTL 60s `quote_expires_at`, proposal TTL 5m `expires_at`, velocity window 1h, duplicate window 1h). Approved carts reserve integer-cent funds atomically in PostgreSQL.
+3. **Break the Mandate (Adversarial Testing)**: 15 scripted attacks (`over_budget`, `over_cap`, `off_list_merchant`, `lookalike_merchant`, `mislabeled_category`, `inflated_price`, `hidden_line_item`, `quantity_inflation`, `currency_swap`, `expired_mandate`, `revoked_mandate`, `velocity_burst`, `duplicate_replay`, `subscription_upsell`, `cart_swap_after_approval`) prove zero breaches and zero PayPal calls when blocked.
+4. **Durable Execution, Reconciliation & Bounded Recovery**: Every PayPal mutation writes a durable `Operation` outbox row (`Operation.attempts`, `Operation.payload_hash`) before calling PayPal with a stable `PayPal-Request-Id`. Ambiguous timeouts/5xx hold the reservation in `UNKNOWN` until the background lease worker resolves it via `GET` order lookup. When something goes wrong after capture, a human opens a recovery case with evidence and economics to issue a bounded partial refund.
 5. **Hash-Chained Audit Ledger**: Every grant, policy verdict, reservation, capture, refund, and webhook is appended to a SHA-256 hash chain verifiable at `/api/ledger/verify`.
 
 ## How We Built It
-- **Backend**: Python 3.11+, FastAPI, SQLAlchemy, Alembic (`0001`–`0004`), PostgreSQL 17 with `SELECT ... FOR UPDATE` row-level locking and `CHECK` constraints enforcing `spent_cents + reserved_cents <= budget_cents` in integer cents.
+- **Backend**: Python 3.11+, FastAPI, SQLAlchemy, Alembic (`0001_prototype`, `0002_hardening`, `0003_vault_grants`, `0004_challenge_attempts`), PostgreSQL 17 with `SELECT ... FOR UPDATE` row-level locking and `CHECK` constraints enforcing `spent_cents + reserved_cents <= budget_cents` in integer cents.
 - **Frontend**: React 19, TypeScript, Vite 8, Zod runtime boundary schemas, CSRF + `HttpOnly`/`SameSite=Strict` session cookies, and `PUBLIC_DEMO` isolated visitor workspaces.
 - **Security**: Fernet encryption at rest for PayPal vault tokens (`VAULT_ENCRYPTION_KEY`), strict PayPal Sandbox-only URL/env guards, redacted diagnostics, and DB-backed rate limits.
 
@@ -31,23 +31,38 @@ Mandate separates **shopping intent** from **payment authority**. An AI agent ca
   3. **Advisory Refund-Cause Suggestion**: suggests a recovery cause (`POST /api/cases/suggest-cause`) for human review.
 - **Where AI is deliberately kept out**: The LLM **never** approves payments, **never** touches `vault_token_ref` or PayPal credentials, **never** computes prices or refunds, and **never** overrides `P01`–`P11` or `cart_hash` binding.
 
-## Sponsor Technologies Used
+## Deterministic Policy Invariants (`P01`–`P11`)
 
-- **AG Grid (Official Hackathon Sponsor — Best Use of AG Grid / AG Studio)**:
-  - Patterned after the official [`paypaldev/hackathon-paypal-ag-grid-boilerplate`](https://github.com/paypaldev/hackathon-paypal-ag-grid-boilerplate) reference architecture.
-  - Integrated `ag-grid-react` and `ag-grid-community` into both the **Decision Ledger** (`/ledger`) and **Payments & Reservations** (`/payments`) dashboards.
-  - Delivers an interactive, self-serve financial analytics experience with real-time quick search, multi-column sorting, CSV data export, and dynamic light/dark theming (`ag-theme-quartz` / `ag-theme-quartz-dark`).
-  - Master-detail interaction: clicking any row in the AG Grid ledger seamlessly opens the audit drawer to display the payload and cryptographic SHA-256 P01–P11 invariant check results.
-- **Render (Official Hackathon Sponsor)**:
-  - Complete `render.yaml` infrastructure-as-code Blueprint featuring Docker containerization, health check probes (`/api/health`), automated pre-deploy PostgreSQL migrations, and isolated evaluation sessions (`PUBLIC_DEMO=true`).
-- **Postman (Official Hackathon Sponsor)**:
-  - Complete OpenAPI-derived Postman collection ([`docs/mandate.postman_collection.json`](mandate.postman_collection.json)) covering all 36 REST endpoints across session management, autonomous agent runs, policy evaluations, PayPal orders, vault grants, capture webhooks, and cryptographic audit ledger verification.
-- **Zapier (Official Hackathon Sponsor)**:
-  - Non-blocking webhook notification dispatcher (`apps/api/mandate/zapier.py`) triggering automated Zapier workflows whenever a policy violation is blocked (`DENY`), an ambiguity requires human approval (`ESCALATE`), or an autonomous PayPal vault payment completes.
-  - Includes interactive test dispatch (`POST /api/integrations/zapier/test`) and status inspection (`GET /api/integrations/status`).
-- **Channel3 (Official Hackathon Sponsor)**:
-  - E-commerce catalog adapter (`apps/api/mandate/channel3.py`) bringing product search across 25,000+ retailers into the autonomous shopping agent with fallback resolution.
-  - Crucially, Mandate's deterministic policy engine validates Channel3 items against the user's spending grant and caps before PayPal execution—proving safe autonomous commerce across external merchant networks.
+Every proposed cart is evaluated synchronously against active grant parameters before any reservation or payment execution occurs (`apps/api/mandate/policy.py`).
+
+| Rule ID | Rule Name | What It Checks | Failure Action |
+| :--- | :--- | :--- | :---: |
+| **`P01`** | **Active authority** | Verifies `grant.status == "ACTIVE"` and `grant.expires_at > now()`. | `DENY` |
+| **`P02`** | **Budget** | Verifies canonical cart total plus spent and reserved funds fits the grant budget (`total + spent_cents + reserved_cents - reserved_credit <= budget_cents`). | `DENY` |
+| **`P03`** | **Transaction cap** | Verifies canonical cart total does not exceed the single-purchase transaction cap (`total <= per_transaction_cents`). | `DENY` |
+| **`P04`** | **Trusted merchant** | Verifies merchant is `demo-merchant` and is present in `grant.allowed_merchants` allowlist (`all(i["merchant_id"] == "demo-merchant" and i["merchant_id"] in grant.allowed_merchants for i in items)`). | `DENY` |
+| **`P05`** | **Category** | Verifies all cart item categories are present in `grant.allowed_categories` allowlist (`all(i["category"] in grant.allowed_categories for i in items)`). | `DENY` |
+| **`P06`** | **Exact quote** | Verifies all items exist in catalog, currency is USD, total > 0, quantity <= 100, and claimed total equals canonical total (`claimed_total is None or claimed_total == total`). | `DENY` |
+| **`P07`** | **Velocity** | Verifies hourly reserved/completed purchases are within velocity limit (`used < grant.velocity_limit`). | `DENY` |
+| **`P08`** | **Purchase identity** | Verifies purchase intent deduplication under row-level grant lock. | `PASS` (Deduplicated) |
+| **`P09`** | **Confirmed constraints** | Checks item attributes against grant constraints and natural language instruction constraints. Fails `DENY` on explicit mismatch against grant constraints; yields `ESCALATE` if required grant attributes are missing or if extracted instruction constraints require operator review. | `DENY` (mismatch) / `ESCALATE` (missing / unlisted attribute) |
+| **`P10`** | **Non-recurring** | Verifies no items in the cart are marked recurring (`recurring == True`). | `DENY` |
+| **`P11`** | **Additional review** | Flags duplicate cart submitted within 1 hour or total exceeding 80% of transaction cap (`total * 100 > grant.per_transaction_cents * 80 or duplicate`). | `ESCALATE` |
+
+### Cryptographic Cart-Hash Binding (Separate from P01–P11)
+- **`cart_hash`**: `cart_hash = digest(cart)` computes the SHA-256 digest over the canonical items, quantities, unit prices, and currency.
+- It binds the proposal, the atomic database reservation, the durable operation outbox record (`Operation.payload_hash`), and the PayPal order.
+- If a cart payload is modified after policy evaluation, the cryptographic hash binding rejects execution before any PayPal API call can be initiated.
+
+## Sponsor Technologies
+
+| Sponsor | Implementation & Role in Mandate | Status |
+| :--- | :--- | :--- |
+| **AG Grid** | Integrated via `ag-grid-react` & `ag-grid-community` into two screens: **Decision Ledger** (`/ledger`) and **Payments Queue** (`/payments`), providing interactive data grids with sorting, filtering, CSV export, and light/dark theme synchronization (`ag-theme-quartz` / `ag-theme-quartz-dark`). Master-detail interaction opens the audit drawer for row inspection. | Integrated & verified in web build |
+| **Render** | Infrastructure-as-code Blueprint in [`render.yaml`](render.yaml) building Docker runtime with PostgreSQL, pre-deploy migrations, and health check probes (`/api/health`). | Blueprint ready; hosted URL pending deployment |
+| **Postman** | OpenAPI-derived 36-endpoint collection in [`docs/mandate.postman_collection.json`](mandate.postman_collection.json) covering all REST routes and schemas. | Collection committed in repo; not published to Postman Network |
+| **Zapier** | Background webhook dispatcher ([`apps/api/mandate/zapier.py`](../apps/api/mandate/zapier.py)) emitting events on policy evaluations, captures, and refunds. Test endpoint at `POST /api/integrations/zapier/test`. | Built & optional; active when `ZAPIER_WEBHOOK_URL` is set in `.env` |
+| **Channel3** | E-commerce product search adapter ([`apps/api/mandate/channel3.py`](../apps/api/mandate/channel3.py)) with query search endpoint `GET /api/integrations/channel3/search`. When `CHANNEL3_API_KEY` is not set, uses curated fallback items. Items are strictly bounded by Mandate's merchant allowlist (`P04`) and budget limits. Default guided demo uses trusted local catalog. | Built & optional; active when `CHANNEL3_API_KEY` is set in `.env` |
 
 ## Challenges
 - **Eliminating silent state drift**: Mapping ambiguous PayPal timeouts/5xx to `UNKNOWN` with held reservations and durable outbox `PayPal-Request-Id` retries required careful row locking so retries never double-charge or leak budget.
@@ -55,8 +70,8 @@ Mandate separates **shopping intent** from **payment authority**. An AI agent ca
 
 ## Accomplishments
 - **Verified Live PayPal Sandbox Run (Nov 12, 2026)**: End-to-end execution of `scripts/live_vault_check.py` passed in PayPal Sandbox: vault grant stored (Fernet-encrypted) + `$1.00` setup auto-refunded, `$349.00` proposal approved, autonomous `vault-charge` captured, PayPal `GET` order confirmed `COMPLETED`, `$314.10` (`31410` cents) partial refund executed via recovery case, and SHA-256 audit chain verified valid (`10` events).
-- **Automated Offline Verification**: **202 backend tests** passed (`pytest`, loopback-only socket guard, `[MOCKED]` PayPal/Groq transports, Hypothesis property tests) and **14 frontend boundary tests** passed (`npm test`).
-- **Synthetic Policy Benchmark** (*Synthetic: scripted scenarios written by the author*): `8 attack kinds, 50 variants` -> **50 of 50 blocked** (`95% CI 92.86–100.0%`), **0 of 50 false positives** (`95% CI 0.0–7.14%`), `10 of 50` legitimate carts escalated (`95% CI 11.24–33.04%`), `p50=0.918 ms`, `p95=1.311 ms`.
+- **Automated Offline Verification**: **210 backend tests** passed (`pytest`, loopback-only socket guard, `[MOCKED]` PayPal/Groq transports, Hypothesis property tests) and **15 frontend boundary tests** passed (`npm test`).
+- **Synthetic Policy Benchmark** (*Synthetic: scripted scenarios written by the author*): `8 attack kinds (currency_swap, inflated_price, lookalike_merchant, mislabeled_category, off_list_merchant, over_budget, over_cap, subscription_upsell), 50 variants` -> **50 of 50 blocked** (`95% CI 92.86–100.0%`), **0 of 50 false positives** (`95% CI 0.0–7.14%`), `10 of 50` legitimate carts escalated (`95% CI 11.24–33.04%`), `p50=0.918 ms`, `p95=1.311 ms`.
 - *(Still unverified externally: signed PayPal webhook delivery over public HTTPS and hosted Render deployment.)*
 
 ## What We Learned
