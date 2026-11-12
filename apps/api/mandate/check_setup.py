@@ -5,6 +5,7 @@ from . import config
 from .db import engine
 from .migrate import ensure_schema_current
 from .payments.paypal import REQUIRED_ENVIRONMENT
+from .vault import vault_key_configured
 
 
 def integration_checks(environ):
@@ -21,6 +22,7 @@ def main():
         checks.append(("Database connection and migration head; check PostgreSQL and run migrations", False))
     checks.append(("Built frontend; run npm.cmd --prefix apps/web run build", (config.WEB_DIST / "index.html").is_file()))
     checks.extend(integration_checks(os.environ))
+    checks.append(("VAULT_ENCRYPTION_KEY (Fernet)", vault_key_configured(os.environ)))
     if config.ACCESS_REQUIRED:
         checks.append(("Application access key", len(config.APP_ACCESS_KEY) >= 32))
     for name, ready in checks:

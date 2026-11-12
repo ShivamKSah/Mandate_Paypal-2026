@@ -268,6 +268,7 @@ export default function App() {
                 const created = await api.createMandate(body);
                 setSelectedGrantId(created.id);
               }}
+              paypalConfigured={Boolean(session?.paypal_configured)}
             />
           )}
           {view === "proposals" && (

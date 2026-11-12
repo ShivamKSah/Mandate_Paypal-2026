@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { ArrowUpRight, CircleAlert, WalletCards } from "lucide-react";
 import { api, type Mandate, type Payment, type Proposal } from "./api";
-import { date, money, paymentActions, type Action } from "./domain";
+import { date, grantModeLabel, money, paymentActions, type Action } from "./domain";
 import { PageTitle, Empty } from "./ui";
 export function Payments({
   payments,
@@ -79,8 +79,8 @@ export function Payments({
                       .join(", ") ?? "Proposal payment"}
                   </strong>
                   <span>
-                    {pay.status.replaceAll("_", " ")} · {pay.id.slice(0, 10)} ·{" "}
-                    {date(pay.created_at)}
+                    {pay.status.replaceAll("_", " ")} · {grantModeLabel(grant)} ·{" "}
+                    {pay.id.slice(0, 10)} · {date(pay.created_at)}
                   </span>
                   {returnedOrder && (
                     <em className="return-tag">
@@ -132,6 +132,23 @@ export function Payments({
                       Continue with PayPal <ArrowUpRight size={14} />
                     </a>
                   )}
+                  {available.vaultCharge && (
+                    <button
+                      className="button-dark"
+                      disabled={working || !configured}
+                      title={
+                        !configured ? "PayPal is not configured" : undefined
+                      }
+                      onClick={() =>
+                        void action(
+                          () => api.vaultCharge(pay.id),
+                          "Autonomous vault charge completed.",
+                        )
+                      }
+                    >
+                      Charge vaulted PayPal
+                    </button>
+                  )}
                   {available.checkout && (
                     <button
                       className="button-quiet"
@@ -146,7 +163,9 @@ export function Payments({
                         )
                       }
                     >
-                      Start checkout
+                      {available.vaultCharge
+                        ? "Fallback: buyer checkout"
+                        : "Start checkout"}
                     </button>
                   )}
                   {available.capture && (

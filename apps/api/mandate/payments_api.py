@@ -15,6 +15,7 @@ from .policy import evaluate
 from .security import human, owned
 from .schemas import ItemInput
 from .settlement import capture_from_order, lock_payment, settle_capture, settle_order
+from .vault import VaultConfigError, decrypt_vault_token, mask_token
 
 router = APIRouter(prefix="/api/payments")
 
@@ -97,6 +98,8 @@ def save_failure(db, owner, operation_id, payment_id, error, result=None):
         payment.status = "UNKNOWN"
     elif operation.kind == "CAPTURE":
         payment.status = "ORDER_CREATED"
+    elif operation.kind == "CREATE" and (operation.request_payload or {}).get("mode") == "VAULT_CHARGE" and not payment.provider_order_id:
+        payment.status = "RESERVED"
     if result and result.get("id"):
         operation.result = {"id": result["id"], "status": result.get("status")}
         if operation.kind == "CREATE" and not payment.provider_order_id:
@@ -193,5 +196,48 @@ async def capture(payment_id: str, owner=Depends(human), db: DBSession = Depends
             raise HTTPException(502, provider_failure_message(error, "Capture has no confirmed success; reservation retained")) from None
         if not settle_capture(db, payment_id, result):
             raise HTTPException(409, "Capture result requires reconciliation; reservation retained")
+        payment = db.get(Payment, payment_id)
+        return payment_view(payment, db)
+
+
+@router.post("/{payment_id}/vault-charge")
+async def vault_charge(payment_id: str, owner=Depends(human), db: DBSession = Depends(get_db)):
+    payment, grant, proposal = payment_context(db, owner, payment_id)
+    if payment.status == "CAPTURED":
+        return payment_view(payment, db)
+    if payment.status != "RESERVED":
+        raise HTTPException(409, "Payment is not ready for autonomous vault charge")
+    if grant.vault_status != "GRANTED" or not grant.vault_token_ref:
+        raise HTTPException(409, "Grant does not have an active PayPal vault token")
+    dispatch_guard(db, grant, proposal, payment)
+    try:
+        vault_token = decrypt_vault_token(grant.vault_token_ref)
+    except VaultConfigError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    async with configured_client() as client:
+        if not client.configured:
+            raise HTTPException(503, "PayPal sandbox credentials and merchant are not configured; reservation remains local")
+        payload = {"cart": proposal.cart, "merchant_id": os.getenv("PAYPAL_MERCHANT_ID"), "mode": "VAULT_CHARGE"}
+        operation = begin_operation(db, payment, "CREATE", payload)
+        payment.status = "CAPTURE_PENDING"
+        append(db, owner, "VAULT_CHARGE_DISPATCHED", payment.id,
+               {"operation_id": operation.id, "cart_hash": proposal.cart_hash, "vault_id": mask_token(vault_token)})
+        request_id, operation_id = operation.request_id, operation.id
+        db.commit()
+        result = None
+        try:
+            result = await client.charge_vault(payload["cart"], vault_token, request_id)
+            order_id = result.get("id")
+            if not isinstance(order_id, str) or not order_id or (payment.provider_order_id and payment.provider_order_id != order_id):
+                raise PayPalError("Vault charge order requires reconciliation", code="INVALID_ORDER_RESPONSE", ambiguous=True)
+            payment.provider_order_id = order_id
+            db.flush()
+            if capture_from_order(result, payment) is None or not settle_capture(db, payment_id, result):
+                raise PayPalError("Vault charge capture requires reconciliation", code="UNCONFIRMED_CAPTURE", ambiguous=True)
+            op = db.get(Operation, operation_id)
+            op.status, op.result = "COMPLETED", {"id": order_id, "status": "COMPLETED"}
+        except PayPalError as error:
+            save_failure(db, owner, operation_id, payment_id, error, result)
+            raise HTTPException(502, provider_failure_message(error, "Autonomous vault charge has no confirmed success; reservation retained")) from None
         payment = db.get(Payment, payment_id)
         return payment_view(payment, db)

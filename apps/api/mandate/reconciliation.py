@@ -9,9 +9,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .audit import append, digest
 from .db import SessionLocal
-from .models import Case, Operation, Payment, Proposal, ReconciliationLease, now
+from .models import Case, Mandate, Operation, Payment, Proposal, ReconciliationLease, now
 from .payments.paypal import PayPalClient, PayPalError
 from .settlement import lock_payment, offer_digest, settle_capture, settle_order, settle_refund
+from .vault import VaultConfigError, decrypt_vault_token
 from .webhooks import retry_events
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,14 @@ def apply_result(operation_id, result):
             settled = settle_refund(db, operation_id, result)
         elif operation.kind == 'CAPTURE':
             settled = settle_capture(db, payment.id, result)
+        elif (operation.request_payload or {}).get('mode') == 'VAULT_CHARGE':
+            if isinstance(result.get('id'), str) and result['id'] and not payment.provider_order_id:
+                payment.provider_order_id = result['id']
+                db.flush()
+            settled = settle_capture(db, payment.id, result)
+            if settled:
+                operation.status = 'COMPLETED'
+                operation.result = {'id': result['id'], 'status': 'COMPLETED'}
         else:
             settled = settle_order(db, operation_id, result)
             if not settled and result.get('id') == payment.provider_order_id:
@@ -129,13 +138,22 @@ async def reconcile_operation(client, operation_id):
         return False
     payload, request_id = prepared
     try:
-        if kind == 'CREATE':
+        if kind == 'CREATE' and payload.get('mode') == 'VAULT_CHARGE':
+            with SessionLocal() as db:
+                operation = db.get(Operation, operation_id)
+                payment = db.get(Payment, operation.payment_id)
+                grant = db.get(Mandate, payment.mandate_id)
+                if not grant or grant.status != 'ACTIVE' or grant.vault_status != 'GRANTED' or not grant.vault_token_ref:
+                    return False
+                vault_token = decrypt_vault_token(grant.vault_token_ref)
+            result = await client.charge_vault(payload['cart'], vault_token, request_id)
+        elif kind == 'CREATE':
             result = await client.create_order(payload['cart'], request_id, payload['return_url'], payload['cancel_url'])
         elif kind == 'CAPTURE':
             result = await client.capture_order(payload['order_id'], request_id)
         else:
             result = await client.refund_capture(payload['capture_id'], payload['amount_cents'], request_id)
-    except PayPalError:
+    except (PayPalError, VaultConfigError):
         # A rejection on this retry cannot disprove the earlier unknown outcome.
         return False
     return apply_result(operation_id, result)

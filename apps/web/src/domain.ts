@@ -86,6 +86,12 @@ export function canApproveProposal(
     currentAuthority(proposal, grant, now)
   );
 }
+export function grantModeLabel(grant: Mandate | undefined | null): string {
+  return grant?.vault_status === "GRANTED"
+    ? "Autonomous (vaulted)"
+    : "Buyer approves each purchase";
+}
+
 export function paymentActions(
   payment: Payment,
   proposal: Proposal | undefined,
@@ -101,6 +107,10 @@ export function paymentActions(
   );
   return {
     checkout: authorized && payment.status === "RESERVED",
+    vaultCharge:
+      authorized &&
+      payment.status === "RESERVED" &&
+      grant?.vault_status === "GRANTED",
     approval:
       authorized &&
       payment.status === "ORDER_CREATED" &&

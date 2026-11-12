@@ -46,6 +46,9 @@ class Mandate(Base):
     spent_cents: Mapped[int] = mapped_column(Integer, default=0)
     reserved_cents: Mapped[int] = mapped_column(Integer, default=0)
     version: Mapped[int] = mapped_column(Integer, default=1)
+    vault_status: Mapped[str] = mapped_column(String(20), default="NONE")
+    vault_token_ref: Mapped[str | None] = mapped_column(Text)
+    grant_order_id: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 

@@ -51,6 +51,21 @@ export const MandateSchema = z.object({
   reserved_cents: CentsSchema,
   available_cents: CentsSchema,
   version: z.number().int().positive(),
+  vault_status: z
+    .enum(["NONE", "PENDING", "GRANTED", "FAILED", "REVOKED"])
+    .default("NONE"),
+  grant_order_id: z.string().nullable().optional(),
+});
+const GrantInitSchema = z.object({
+  mandate: MandateSchema,
+  order_id: z.string(),
+  approval_url: ApprovalUrlSchema,
+});
+const GrantCompleteSchema = z.object({
+  mandate: MandateSchema,
+  vault_status: z.string(),
+  masked_vault_id: z.string().optional(),
+  refund_status: z.string(),
 });
 const RuleSchema = z.object({
   id: z.string(),
@@ -263,6 +278,14 @@ export const api = {
     request("/mandates", MandateSchema, post(CreateMandateSchema.parse(body))),
   revoke: (id: string) =>
     request(`/mandates/${id}/revoke`, MandateSchema, post({})),
+  initVaultGrant: (id: string) =>
+    request(`/mandates/${id}/grant/init`, GrantInitSchema, post({})),
+  completeVaultGrant: (id: string, order_id?: string) =>
+    request(
+      `/mandates/${id}/grant/complete`,
+      GrantCompleteSchema,
+      post(order_id ? { order_id } : {}),
+    ),
   proposals: () => request("/proposals", list(ProposalSchema)),
   propose: (body: CreateProposal) =>
     request(
@@ -279,6 +302,8 @@ export const api = {
   payments: () => request("/payments", list(PaymentSchema)),
   checkout: (id: string) =>
     request(`/payments/${id}/checkout`, PaymentSchema, post({})),
+  vaultCharge: (id: string) =>
+    request(`/payments/${id}/vault-charge`, PaymentSchema, post({})),
   cancelPayment: (id: string) =>
     request(`/payments/${id}/cancel`, PaymentSchema, post({})),
   capture: (id: string) =>

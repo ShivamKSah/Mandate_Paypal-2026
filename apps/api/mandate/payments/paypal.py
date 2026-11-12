@@ -214,9 +214,7 @@ class PayPalClient:
             )
         return result
 
-    async def create_order(
-        self, cart: Mapping[str, Any], request_id: str, return_url: str, cancel_url: str,
-    ) -> dict[str, Any]:
+    def _build_purchase_unit(self, cart: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(cart, Mapping) or cart.get("merchant_id") != self._trusted_merchant_id:
             raise PayPalError("Cart merchant is not the configured trusted merchant.", code="UNTRUSTED_MERCHANT")
         if cart.get("currency") != "USD":
@@ -239,7 +237,14 @@ class PayPalClient:
             paypal_items.append({"name": name, "quantity": str(quantity), "unit_amount": unit_amount})
         if computed_total != cart["total_cents"]:
             raise PayPalError("Cart total does not match its canonical items.", code="INVALID_CART")
-        for url in (return_url, cancel_url):
+        return {
+            "payee": {"merchant_id": self._merchant_id},
+            "amount": {**amount, "breakdown": {"item_total": amount.copy()}},
+            "items": paypal_items,
+        }
+
+    def _validate_callback_urls(self, *urls: str) -> None:
+        for url in urls:
             try:
                 parsed = urlsplit(url)
                 valid = isinstance(url, str) and parsed.scheme in {"https", "http"} and parsed.hostname
@@ -249,18 +254,69 @@ class PayPalClient:
                 raise PayPalError("Valid server-configured callback URLs are required.", code="INVALID_CALLBACK")
             if parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
                 raise PayPalError("Nonlocal callback URLs require HTTPS.", code="INVALID_CALLBACK")
+
+    async def create_order(
+        self, cart: Mapping[str, Any], request_id: str, return_url: str, cancel_url: str,
+    ) -> dict[str, Any]:
+        purchase_unit = self._build_purchase_unit(cart)
+        self._validate_callback_urls(return_url, cancel_url)
+        return await self._request(
+            "POST", "/v2/checkout/orders", request_id=request_id, mutation=True,
+            body={
+                "intent": "CAPTURE",
+                "purchase_units": [purchase_unit],
+                "payment_source": {"paypal": {"experience_context": {
+                    "return_url": return_url, "cancel_url": cancel_url, "user_action": "PAY_NOW",
+                }}},
+            },
+        )
+
+    async def create_vault_setup_order(
+        self, mandate_id: str, request_id: str, return_url: str, cancel_url: str,
+    ) -> dict[str, Any]:
+        self._validate_callback_urls(return_url, cancel_url)
         return await self._request(
             "POST", "/v2/checkout/orders", request_id=request_id, mutation=True,
             body={
                 "intent": "CAPTURE",
                 "purchase_units": [{
+                    "reference_id": f"grant-{_provider_id(mandate_id)}",
                     "payee": {"merchant_id": self._merchant_id},
-                    "amount": {**amount, "breakdown": {"item_total": amount.copy()}},
-                    "items": paypal_items,
+                    "amount": {"currency_code": "USD", "value": "1.00"},
+                    "description": "Mandate vault authorization ($1.00 refundable)",
                 }],
-                "payment_source": {"paypal": {"experience_context": {
-                    "return_url": return_url, "cancel_url": cancel_url, "user_action": "PAY_NOW",
-                }}},
+                "payment_source": {
+                    "paypal": {
+                        "experience_context": {
+                            "return_url": return_url,
+                            "cancel_url": cancel_url,
+                            "user_action": "PAY_NOW",
+                            "payment_method_preference": "IMMEDIATE_PAYMENT_REQUIRED",
+                        },
+                        "attributes": {
+                            "vault": {
+                                "store_in_vault": "ON_SUCCESS",
+                                "usage_type": "MERCHANT",
+                                "customer_type": "CONSUMER",
+                            }
+                        },
+                    }
+                },
+            },
+        )
+
+    async def charge_vault(
+        self, cart: Mapping[str, Any], vault_token: str, request_id: str,
+    ) -> dict[str, Any]:
+        if not isinstance(vault_token, str) or not vault_token.strip():
+            raise PayPalError("A valid vault token is required.", code="INVALID_VAULT_TOKEN")
+        purchase_unit = self._build_purchase_unit(cart)
+        return await self._request(
+            "POST", "/v2/checkout/orders", request_id=request_id, mutation=True,
+            body={
+                "intent": "CAPTURE",
+                "purchase_units": [purchase_unit],
+                "payment_source": {"paypal": {"vault_id": vault_token.strip()}},
             },
         )
 

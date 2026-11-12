@@ -17,6 +17,7 @@ if os.getenv("PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com") != "https://
     raise RuntimeError("Only the PayPal sandbox API is permitted")
 
 PAYPAL_CONFIGURED = all(os.getenv(name, "").strip() for name in ("PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_MERCHANT_ID"))
+VAULT_ENCRYPTION_KEY = os.getenv("VAULT_ENCRYPTION_KEY", "").strip()
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", os.getenv("APP_BASE_URL", "http://localhost:5173")).rstrip("/")
 APP_ENV = os.getenv("APP_ENV", "development").lower()

@@ -21,6 +21,7 @@ import {
 } from "./api";
 import {
   date,
+  grantModeLabel,
   money,
   parseMoney,
   parseInteger,
@@ -43,6 +44,7 @@ export function Overview({
   working,
   action,
   createGrant,
+  paypalConfigured,
 }: {
   grant: Mandate | null;
   mandates: Mandate[];
@@ -57,11 +59,16 @@ export function Overview({
   working: boolean;
   action: Action;
   createGrant: (body: CreateMandate) => Promise<void>;
+  paypalConfigured: boolean;
 }) {
   const [budget, setBudget] = useState("500");
   const [cap, setCap] = useState("500");
   const [constraint, setConstraint] = useState("160");
   const [creatingGrant, setCreatingGrant] = useState(false);
+  const [vaultLink, setVaultLink] = useState<{
+    grantId: string;
+    approvalUrl: string;
+  } | null>(null);
   useEffect(() => {
     if (!creatingGrant) return;
     const input = document.getElementById("grant-budget");
@@ -236,7 +243,63 @@ export function Overview({
                   <span>Expires</span>
                   <strong>{date(grant.expires_at)}</strong>
                 </div>
+                <div>
+                  <span>Payment mode</span>
+                  <strong>{grantModeLabel(grant)}</strong>
+                </div>
+                <div>
+                  <span>Vault status</span>
+                  <strong>{grant.vault_status}</strong>
+                </div>
               </div>
+              {grant.vault_status !== "GRANTED" && (
+                <div className="vault-controls">
+                  {vaultLink?.grantId === grant.id && (
+                    <a
+                      className="button-outline"
+                      href={vaultLink.approvalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Approve $1.00 PayPal vault setup <ArrowUpRight size={14} />
+                    </a>
+                  )}
+                  <button
+                    className="button-quiet"
+                    disabled={working || !paypalConfigured}
+                    title={
+                      !paypalConfigured ? "PayPal is not configured" : undefined
+                    }
+                    onClick={() =>
+                      void action(async () => {
+                        const res = await api.initVaultGrant(grant.id);
+                        setVaultLink({
+                          grantId: grant.id,
+                          approvalUrl: res.approval_url,
+                        });
+                      }, "Vault setup order created. Approve in PayPal, then complete the grant.")
+                    }
+                  >
+                    {grant.vault_status === "PENDING"
+                      ? "Re-init PayPal vault ($1.00 refundable)"
+                      : "Enable Autonomous (vaulted)"}
+                  </button>
+                  {grant.vault_status === "PENDING" && grant.grant_order_id && (
+                    <button
+                      className="button-dark"
+                      disabled={working || !paypalConfigured}
+                      onClick={() =>
+                        void action(async () => {
+                          await api.completeVaultGrant(grant.id);
+                          setVaultLink(null);
+                        }, "PayPal vault grant enabled and $1.00 authorization refunded.")
+                      }
+                    >
+                      Complete vault grant
+                    </button>
+                  )}
+                </div>
+              )}
               <button
                 className="button-quiet danger"
                 disabled={working}

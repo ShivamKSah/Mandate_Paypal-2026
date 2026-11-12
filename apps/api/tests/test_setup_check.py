@@ -1,4 +1,7 @@
+from cryptography.fernet import Fernet
+
 from mandate.check_setup import integration_checks
+from mandate.vault import vault_key_configured
 
 
 def test_setup_check_reports_names_and_never_values():
@@ -10,3 +13,9 @@ def test_setup_check_reports_names_and_never_values():
     assert all(value not in repr(checks) for value in values.values())
     values["PAYPAL_CLIENT_SECRET"] = "   "
     assert dict(integration_checks(values))["PAYPAL_CLIENT_SECRET"] is False
+
+
+def test_vault_key_configured_validates_fernet_format():
+    assert vault_key_configured({"VAULT_ENCRYPTION_KEY": ""}) is False
+    assert vault_key_configured({"VAULT_ENCRYPTION_KEY": "not-a-fernet-key"}) is False
+    assert vault_key_configured({"VAULT_ENCRYPTION_KEY": Fernet.generate_key().decode()}) is True

@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   activeGrants,
   canApproveProposal,
+  grantModeLabel,
   parseInteger,
   parseMoney,
   paymentActions,
@@ -30,6 +31,7 @@ const grant = {
   reserved_cents: 0,
   available_cents: 50000,
   version: 1,
+  vault_status: "NONE",
 };
 const payment = {
   id: "payment",
@@ -232,5 +234,24 @@ test("invalid agent results fail at the response boundary", async (t) => {
   await assert.rejects(
     api.agentRun("grant", "Find a desk"),
     /Unexpected response/,
+  );
+});
+
+test("vault charge capability requires granted vault status and current authority", () => {
+  const reserved = PaymentSchema.parse({
+    ...payment,
+    status: "RESERVED",
+    provider_order_id: null,
+    approval_url: null,
+  });
+  assert.equal(grantModeLabel(grant), "Buyer approves each purchase");
+  assert.equal(paymentActions(reserved, proposal, grant, now).vaultCharge, false);
+  const vaulted = MandateSchema.parse({ ...grant, vault_status: "GRANTED" });
+  assert.equal(grantModeLabel(vaulted), "Autonomous (vaulted)");
+  assert.equal(paymentActions(reserved, proposal, vaulted, now).vaultCharge, true);
+  assert.equal(
+    paymentActions(reserved, proposal, { ...vaulted, status: "REVOKED" }, now)
+      .vaultCharge,
+    false,
   );
 });
