@@ -1,6 +1,110 @@
-# Mandate
+# Garuda (Mandate) — Bounded Spending Authority for AI Shopping Agents
 
-Mandate is a bounded-authority AI shopping and payment-control system built with FastAPI, React, PostgreSQL 17, Alembic, and a PayPal Sandbox execution adapter. A human user sets a time- and budget-capped spending grant, the AI shopping agent (or direct proposal client) submits carts through deterministic `P01`–`P11` policy checks and `cart_hash` binding, approved purchases reserve funds atomically in PostgreSQL, and execution routes through either PayPal Sandbox **Autonomous (vaulted)** setup/charging (`vault_id`, verified live in PayPal Sandbox on Nov 12, 2026) or **Buyer approves each purchase** checkout with a durable outbox, reconciliation worker, and SHA-256 hash-chained audit ledger.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![React 19](https://img.shields.io/badge/react-19-cyan.svg)](https://react.dev/)
+[![PayPal Sandbox](https://img.shields.io/badge/PayPal-Sandbox%20v2-003087.svg)](https://developer.paypal.com/)
+[![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-336791.svg)](https://www.postgresql.org/)
+[![AG Grid](https://img.shields.io/badge/AG%20Grid-Community-brightgreen.svg)](https://www.ag-grid.com/)
+
+Garuda (Mandate) is a production-grade, bounded-authority AI shopping and payment-control system built with **FastAPI**, **React 19**, **PostgreSQL 17**, **Alembic**, and a **PayPal Sandbox** execution engine. 
+
+A human sets a time-, merchant-, and budget-capped spending grant. An AI shopping agent (powered by Groq or fallback rules) browses and proposes carts. Server-side deterministic policy rules (`P01`–`P11`) and cryptographic `cart_hash` binding evaluate every item against canonical catalog prices before any money moves. Approved purchases reserve funds atomically via PostgreSQL row-level locks, and execute through either **Autonomous (vaulted) PayPal charges** (`payment_source.paypal.vault_id`) or **Buyer-present approvals**, backed by a durable outbox, automated reconciliation, and a SHA-256 hash-chained audit ledger.
+
+---
+
+## Detailed System Workflows
+
+### 1. End-to-End Autonomous Shopping Workflow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Human Operator / Judge
+    participant UI as React 19 Dashboard
+    participant API as FastAPI Trust Boundary
+    participant Agent as AI Shopping Agent (Groq)
+    participant Policy as Policy Engine (P01-P11)
+    participant DB as PostgreSQL 17 (Atomic Locks)
+    participant PayPal as PayPal Sandbox REST API
+
+    User->>UI: Set Spending Grant ($500 budget, $400 cap, furniture/electronics, 1hr)
+    UI->>API: POST /api/mandates
+    API->>DB: INSERT INTO mandates (status='ACTIVE')
+    
+    opt One-Time Vault Authorization
+        User->>UI: Click "Enable Autonomous (Vaulted)"
+        UI->>API: POST /api/vault/setup-order
+        API->>PayPal: POST /v2/checkout/orders ($1.00 auth, store_in_vault=ON_SUCCESS)
+        User->>PayPal: Buyer Consents in Sandbox
+        PayPal-->>API: Capture & Auto-Refund $1.00 hold
+        API->>DB: Store encrypted vault_token_ref (Fernet) & set vault_status='GRANTED'
+    end
+
+    User->>UI: Give Agent Prompt ("Find an ergonomic desk under $400")
+    UI->>API: POST /api/agent/run
+    API->>Agent: Extract constraints & search catalog
+    Agent-->>API: Propose items [desk-standing-electric: $349.00]
+    API->>Policy: Evaluate canonical cart against active grant
+    Policy->>Policy: Verify P01-P11 rules + SHA-256 cart_hash
+    Policy-->>API: Verdict: APPROVE
+
+    API->>DB: SELECT ... FOR UPDATE (Check spent + reserved + total <= budget)
+    DB-->>API: Row locked & reservation placed (status='APPROVED')
+
+    alt Autonomous Execution (Vault Enabled)
+        API->>DB: Write durable Operation row (outbox pattern)
+        API->>PayPal: POST /v2/checkout/orders (vault_id, capture immediately)
+        PayPal-->>API: Order status COMPLETED
+        API->>DB: Mark Operation COMPLETED, spent_cents += 34900, reserved_cents -= 34900
+        API->>DB: Append event to SHA-256 Audit Ledger
+    else Buyer Checkout (Vault Disabled)
+        API->>PayPal: Create Order for buyer redirection
+        User->>PayPal: Buyer manually approves purchase
+        API->>PayPal: POST /v2/checkout/orders/{id}/capture
+    end
+```
+
+### 2. Ambiguity & Constraint Escalation Workflow (`P09` / `P11`)
+
+```mermaid
+flowchart TD
+    Cart["Cart Proposed by Agent"] --> Reprice["Re-price with Server Catalog"]
+    Reprice --> Hash["Compute SHA-256 cart_hash"]
+    Hash --> P01P08["P01-P08: Lifecycle, Budget, Cap, Merchant, Category, Quote, Velocity"]
+    P01P08 -- Hard Violation --> Deny["DENY: Atomic Rollback, Zero PayPal Calls"]
+    P01P08 -- Valid --> P09{"P09: Attribute Constraints"}
+    P09 -- Attribute Mismatch --> Deny
+    P09 -- Missing / Ambiguous Attribute --> Escalate["ESCALATE: Flag for Human Review"]
+    P09 -- Fully Matched --> P10{"P10: Non-Recurring"}
+    P10 -- Recurring Subscription Found --> Deny
+    P10 -- One-time Purchase --> P11{"P11: Review Thresholds"}
+    P11 -- Duplicate cart OR Total > 80% Cap --> Escalate
+    P11 -- Normal --> Approve["APPROVE: Row-Locked Reservation & Execution"]
+    
+    Escalate --> Human["Operator Reviews in Dashboard (/proposals)"]
+    Human -- "Reject" --> Deny
+    Human -- "Approve Exception" --> Approve
+```
+
+### 3. Durable Outbox & Reconciliation Worker Workflow
+
+```mermaid
+flowchart LR
+    Reserve["Atomic Reservation Placed"] --> Outbox["Write Operation (PENDING, PayPal-Request-Id)"]
+    Outbox --> Send["Dispatch to PayPal API"]
+    Send -- HTTP 200/201 --> Done["Mark COMPLETED & Finalize Spent Balance"]
+    Send -- Network Timeout / 5xx --> Unknown["Mark UNKNOWN & Hold Reservation"]
+    
+    subgraph Background Recovery Worker
+        Unknown --> Lease["Acquire Reconciliation Lease (Row Lock)"]
+        Lease --> Query["GET /v2/checkout/orders/{id}"]
+        Query -- COMPLETED --> Finalize["Resolve COMPLETED & Deduct Budget"]
+        Query -- NOT_FOUND / CREATED --> Release["Release Reservation & Refund Budget"]
+    end
+```
+
+---
 
 ## Current Verification Status (Honest Summary)
 
@@ -98,6 +202,71 @@ Every proposed cart is evaluated synchronously against the active grant paramete
 - **`cart_hash`**: `cart_hash = digest(cart)` computes the SHA-256 digest over the canonical items, quantities, unit prices, and currency.
 - It binds the proposal, the atomic database reservation, the durable operation outbox record (`Operation.payload_hash`), and the PayPal order.
 - If a cart payload is modified after policy evaluation, the cryptographic hash binding rejects execution before any PayPal API call can be initiated.
+
+## Break the Mandate — Adversarial Security Matrix
+
+Mandate includes 15 automated attack simulations in [apps/api/mandate/attacks.py](apps/api/mandate/attacks.py) testing boundary limits against prompt injections, compromised agents, or malicious merchant catalogs:
+
+| # | Attack Scenario | Vector Description | Enforcing Rule | Outcome |
+| :-: | :--- | :--- | :---: | :---: |
+| 1 | **`over_budget`** | Agent proposes cart exceeding remaining grant budget | `P02` | `DENY` |
+| 2 | **`over_cap`** | Single transaction exceeds per-purchase cap | `P03` | `DENY` |
+| 3 | **`off_list_merchant`** | Purchase routed to unapproved merchant (`untrusted-store`) | `P04` | `DENY` |
+| 4 | **`lookalike_merchant`** | Phishing merchant masquerading as legitimate store (`demo-merchant-fake`) | `P04` | `DENY` |
+| 5 | **`mislabeled_category`** | Restricted category (e.g., prepaid gift cards) | `P05` | `DENY` |
+| 6 | **`inflated_price`** | Agent claims lower price than canonical server catalog quote | `P06` | `DENY` |
+| 7 | **`hidden_line_item`** | Unquoted hidden items bundled into payload | `P06` | `DENY` |
+| 8 | **`quantity_inflation`** | Unreasonable item quantity (> 100 units) | `P06` | `DENY` |
+| 9 | **`currency_swap`** | Attempt to bill in unsupported foreign currency (`EUR`) | `P06` | `DENY` |
+| 10 | **`expired_mandate`** | Transaction submitted after spending grant expiry | `P01` | `DENY` |
+| 11 | **`revoked_mandate`** | Transaction submitted against manually revoked grant | `P01` | `DENY` |
+| 12 | **`velocity_burst`** | Rapid purchases exceeding hourly rate limit | `P07` | `DENY` |
+| 13 | **`duplicate_replay`** | Exact cart replayed within 1-hour duplicate window | `P11` | `ESCALATE` |
+| 14 | **`subscription_upsell`** | Covert recurring billing subscription sneak-in | `P10` | `DENY` |
+| 15 | **`cart_swap_after_approval`** | Cart modified post-approval before PayPal execution | `cart_hash` | Execution Aborted |
+
+*Result across all 15 attacks: 0 breaches, 0 unauthorized database mutations, and 0 external PayPal calls.*
+
+---
+
+## Repository Structure
+
+```text
+├── apps/
+│   ├── api/                     # FastAPI backend application
+│   │   ├── alembic/             # Database migrations (0001_prototype -> 0004_challenge_attempts)
+│   │   ├── mandate/             # Core business logic
+│   │   │   ├── policy.py        # Deterministic P01–P11 invariant policy engine
+│   │   │   ├── models.py        # SQLAlchemy models (Mandate, Proposal, Operation, LedgerEntry)
+│   │   │   ├── catalog.py       # Canonical catalog pricing & quoting
+│   │   │   ├── attacks.py       # 15 Break-the-Mandate attack definitions
+│   │   │   ├── channel3.py      # Channel3 product search adapter
+│   │   │   ├── zapier.py        # Non-blocking Zapier webhook dispatcher
+│   │   │   ├── agents/          # Groq LLM tool-calling shopping agent & fallback
+│   │   │   └── payments/        # PayPal REST API v2 client (Orders, Vault, Refunds)
+│   │   └── tests/               # 210 offline backend tests (Hypothesis, socket guard)
+│   └── web/                     # React 19 + TypeScript frontend dashboard
+│       ├── src/
+│       │   ├── Overview.tsx     # Grant management & Vault setup screen
+│       │   ├── Proposals.tsx    # AI shopping proposals & escalation approvals
+│       │   ├── Payments.tsx     # AG Grid payment queues & PayPal checkout triggers
+│       │   ├── Ledger.tsx       # AG Grid cryptographic SHA-256 audit log
+│       │   ├── Attacks.tsx      # Break-the-Mandate adversarial attack simulator
+│       │   └── Recovery.tsx     # Bounded post-purchase refund case manager
+│       └── tests/               # 15 boundary & schema validation tests
+├── docs/                        # Specifications, Postman collection & submission writeups
+├── scripts/                     # Operator utilities & evaluation runners
+│   ├── check_channel3.py        # Channel3 live search connectivity check (operator)
+│   ├── check_llm.py             # Groq LLM live model response check (operator)
+│   ├── live_vault_check.py      # E2E live PayPal sandbox verification test
+│   ├── predeploy_check.py       # Pre-deploy production environment validator
+│   └── run_evals.py             # Synthetic 100-scenario policy evaluation runner
+├── render.yaml                  # Render Infrastructure-as-Code Blueprint
+├── compose.production.yaml      # Multi-container Docker Compose definition
+└── LICENSE                      # Open-source MIT License
+```
+
+---
 
 ## Sponsor Technologies
 
