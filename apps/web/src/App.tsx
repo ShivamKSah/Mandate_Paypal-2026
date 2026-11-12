@@ -354,6 +354,17 @@ export default function App() {
               }}
               paypalConfigured={Boolean(session?.paypal_configured)}
               vaultAutonomyVerified={Boolean(session?.vault_autonomy_verified)}
+              onAgentResult={(res) =>
+                setAgentFallbackRun(
+                  res.llm_fallback
+                    ? {
+                        planner:
+                          res.planner_label ?? "Rules planner, LLM unavailable",
+                        summary: res.summary,
+                      }
+                    : null,
+                )
+              }
             />
           )}
           {view === "proposals" && (

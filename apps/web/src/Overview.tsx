@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import {
   api,
+  type AgentRunResponse,
   type Mandate,
   type Proposal,
   type RecoveryCase,
@@ -31,6 +32,7 @@ import {
 } from "./domain";
 import { PageTitle, Empty } from "./ui";
 import { BudgetOverview, SpendingCards } from "./OverviewFunding";
+import { GuidedDemo } from "./GuidedDemo";
 export function Overview({
   grant,
   mandates,
@@ -47,6 +49,7 @@ export function Overview({
   createGrant,
   paypalConfigured,
   vaultAutonomyVerified = false,
+  onAgentResult,
 }: {
   grant: Mandate | null;
   mandates: Mandate[];
@@ -63,6 +66,7 @@ export function Overview({
   createGrant: (body: CreateMandate) => Promise<void>;
   paypalConfigured: boolean;
   vaultAutonomyVerified?: boolean;
+  onAgentResult?: (res: AgentRunResponse) => void;
 }) {
   const [budget, setBudget] = useState("500");
   const [cap, setCap] = useState("400");
@@ -117,6 +121,18 @@ export function Overview({
             <ShoppingBag size={16} /> <span>New proposal</span>
           </button>
         }
+      />
+      <GuidedDemo
+        grant={grant}
+        proposals={proposals}
+        payments={payments}
+        cases={cases}
+        paypalConfigured={paypalConfigured}
+        working={working}
+        action={action}
+        createGrant={createGrant}
+        onAgentResult={onAgentResult}
+        setView={setView}
       />
       <div className="overview-grid">
         <SpendingCards

@@ -10,6 +10,11 @@ import {
   recoverablePayments,
 } from "../src/domain.ts";
 import {
+  canRunGuidedRecovery,
+  deriveGuidedStepStatus,
+  GUIDED_ATTACK_IDS,
+} from "../src/guidedDemoLogic.ts";
+import {
   api,
   ApiError,
   ChallengeStatsSchema,
@@ -313,4 +318,108 @@ test("challenge stats and synthetic evaluation schemas enforce exact fields", ()
     }).success,
     true,
   );
+});
+
+test("[MOCKED] guided demo ticks steps on completion and blocks recovery without PayPal", () => {
+  const initial = deriveGuidedStepStatus({
+    grant: null,
+    proposals: [],
+    cases: [],
+    attackResults: [],
+  });
+  assert.deepEqual(initial, {
+    grantCreated: false,
+    mouseProposed: false,
+    attacksBlocked: false,
+    ambiguityApproved: false,
+    refundAccepted: false,
+  });
+
+  const grant = MandateSchema.parse({
+    id: "g-1",
+    status: "ACTIVE",
+    budget_cents: 50000,
+    per_transaction_cents: 40000,
+    allowed_categories: ["furniture", "electronics"],
+    allowed_merchants: ["demo-merchant"],
+    constraints: { width_cm: 160 },
+    instruction: "Office furniture and electronics",
+    expires_at: "2099-01-01T00:00:00Z",
+    spent_cents: 0,
+    reserved_cents: 0,
+    available_cents: 50000,
+    version: 1,
+    vault_status: "NONE",
+  });
+
+  const completed = deriveGuidedStepStatus({
+    grant,
+    proposals: [
+      {
+        id: "p-mouse",
+        mandate_id: "g-1",
+        decision: "APPROVE",
+        status: "APPROVED",
+        total_cents: 4500,
+        currency: "USD",
+        items: [{ product_id: "mouse-ergonomic", quantity: 1 }],
+        rules: [],
+        cart_hash: "a".repeat(64),
+        grant_version: 1,
+        expires_at: "2099-01-01T00:00:00Z",
+        quote_expires_at: "2099-01-01T00:00:00Z",
+        created_at: "2026-11-12T00:00:00Z",
+      },
+      {
+        id: "p-ambig",
+        mandate_id: "g-1",
+        decision: "ESCALATE",
+        status: "APPROVED",
+        total_cents: 29900,
+        currency: "USD",
+        items: [{ product_id: "desk-unknown", quantity: 1 }],
+        rules: [],
+        cart_hash: "b".repeat(64),
+        grant_version: 1,
+        expires_at: "2099-01-01T00:00:00Z",
+        quote_expires_at: "2099-01-01T00:00:00Z",
+        created_at: "2026-11-12T00:00:00Z",
+      },
+    ],
+    cases: [
+      {
+        id: "c-1",
+        payment_id: "pay-1",
+        cause: "seller_error",
+        evidence: "wrong item",
+        offer_cents: 31410,
+        offer_hash: "c".repeat(64),
+        status: "REFUNDED",
+        explanation: "bounded",
+        created_at: "2026-11-12T00:00:00Z",
+      },
+    ],
+    attackResults: GUIDED_ATTACK_IDS.map((id) => ({
+      attack_id: id,
+      title: id,
+      expected_rule: "P02",
+      actual_rule: "P02",
+      decision: "DENY",
+      breached: false,
+      proposal_id: `prop-${id}`,
+      payment_created: false,
+    })),
+  });
+
+  assert.deepEqual(completed, {
+    grantCreated: true,
+    mouseProposed: true,
+    attacksBlocked: true,
+    ambiguityApproved: true,
+    refundAccepted: true,
+  });
+
+  const noPaypal = canRunGuidedRecovery(false, [], []);
+  assert.equal(noPaypal.allowed, false);
+  assert.match(noPaypal.reason ?? "", /not configured/i);
 });
