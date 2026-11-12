@@ -21,6 +21,7 @@ from .resources import router as resources_router
 from .sessions import router as sessions_router
 from .http_boundary import HttpBoundary
 from .agents.router import router as agents_router
+from .integrations_api import router as integrations_router
 from .payments_api import router as payments_router
 from .recovery import router as recovery_router
 from .reconciliation import poll
@@ -56,6 +57,7 @@ app.include_router(payments_router)
 app.include_router(recovery_router)
 app.include_router(webhooks_router)
 app.include_router(attacks_router)
+app.include_router(integrations_router)
 
 
 @app.exception_handler(SQLAlchemyError)

@@ -42,6 +42,12 @@ Mandate separates **shopping intent** from **payment authority**. An AI agent ca
   - Complete `render.yaml` infrastructure-as-code Blueprint featuring Docker containerization, health check probes (`/api/health`), automated pre-deploy PostgreSQL migrations, and isolated evaluation sessions (`PUBLIC_DEMO=true`).
 - **Postman (Official Hackathon Sponsor)**:
   - Complete OpenAPI-derived Postman collection ([`docs/mandate.postman_collection.json`](mandate.postman_collection.json)) covering all 36 REST endpoints across session management, autonomous agent runs, policy evaluations, PayPal orders, vault grants, capture webhooks, and cryptographic audit ledger verification.
+- **Zapier (Official Hackathon Sponsor)**:
+  - Non-blocking webhook notification dispatcher (`apps/api/mandate/zapier.py`) triggering automated Zapier workflows whenever a policy violation is blocked (`DENY`), an ambiguity requires human approval (`ESCALATE`), or an autonomous PayPal vault payment completes.
+  - Includes interactive test dispatch (`POST /api/integrations/zapier/test`) and status inspection (`GET /api/integrations/status`).
+- **Channel3 (Official Hackathon Sponsor)**:
+  - E-commerce catalog adapter (`apps/api/mandate/channel3.py`) bringing product search across 25,000+ retailers into the autonomous shopping agent with fallback resolution.
+  - Crucially, Mandate's deterministic policy engine validates Channel3 items against the user's spending grant and caps before PayPal execution—proving safe autonomous commerce across external merchant networks.
 
 ## Challenges
 - **Eliminating silent state drift**: Mapping ambiguous PayPal timeouts/5xx to `UNKNOWN` with held reservations and durable outbox `PayPal-Request-Id` retries required careful row locking so retries never double-charge or leak budget.

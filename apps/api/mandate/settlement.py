@@ -6,6 +6,7 @@ from sqlalchemy import select
 from .audit import append, digest
 from .config import mask_merchant_id, normalize_merchant_id
 from .models import Case, Mandate, Operation, Payment, Proposal, Session
+from .zapier import send_zapier_event
 
 
 def payee_mismatch_info(payload) -> tuple[bool, str, str]:
@@ -130,6 +131,12 @@ def settle_capture(db, payment_id, result):
     for operation in db.scalars(select(Operation).where(Operation.payment_id == payment.id, Operation.kind == "CAPTURE")):
         operation.status, operation.result = "COMPLETED", {"id": capture["id"], "status": "COMPLETED"}
     append(db, owner, "PAYMENT_CAPTURED", payment.id, {"provider_capture_id": capture["id"], "amount_cents": payment.amount_cents})
+    send_zapier_event("mandate.payment.captured", {
+        "payment_id": payment.id,
+        "provider_capture_id": capture["id"],
+        "amount_cents": payment.amount_cents,
+        "status": "COMPLETED",
+    })
     return True
 
 
@@ -158,4 +165,11 @@ def settle_refund(db, operation_id, result):
     case.status, operation.status = "REFUNDED", "COMPLETED"
     operation.result = {"id": result["id"], "status": "COMPLETED"}
     append(db, owner, "PAYMENT_REFUNDED", case.id, {"payment_id": payment.id, "amount_cents": case.offer_cents, "provider_refund_id": result["id"]})
+    send_zapier_event("mandate.payment.refunded", {
+        "case_id": case.id,
+        "payment_id": payment.id,
+        "amount_cents": case.offer_cents,
+        "provider_refund_id": result["id"],
+        "status": "REFUNDED",
+    })
     return True

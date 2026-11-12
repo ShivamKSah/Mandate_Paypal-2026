@@ -34,6 +34,10 @@ def main():
         f"masked={diag['masked_merchant_id']}"
     )
     print(f"VAULT_AUTONOMY_VERIFIED: {str(config.VAULT_AUTONOMY_VERIFIED).lower()} (labels only)")
+    zapier_status = "configured" if bool(os.getenv("ZAPIER_WEBHOOK_URL")) else "optional / not configured"
+    channel3_status = "configured" if bool(os.getenv("CHANNEL3_API_KEY")) else "optional / fallback catalog active"
+    print(f"SPONSOR ZAPIER: {zapier_status}")
+    print(f"SPONSOR CHANNEL3: {channel3_status}")
     if diag.get("stale_os_conflict"):
         print(f"WARNING: {diag['stale_os_conflict']}")
     if diag.get("inner_outer_conflict"):

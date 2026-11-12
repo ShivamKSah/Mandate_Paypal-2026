@@ -12,6 +12,7 @@ from .models import Mandate, Operation, Payment, Proposal, now
 from .policy import evaluate
 from .schemas import ApprovalInput, ProposalInput
 from .security import human, owned
+from .zapier import send_zapier_event
 
 router = APIRouter(prefix="/api/proposals")
 
@@ -62,6 +63,15 @@ def submit(db, owner, body: ProposalInput, *, extracted_constraints=None, extrac
     db.add(proposal)
     db.flush()
     append(db, owner, "PROPOSAL_DECIDED", proposal.id, {"decision": decision, "cart_hash": proposal.cart_hash, "rules": rules})
+    send_zapier_event("mandate.proposal.evaluated", {
+        "proposal_id": proposal.id,
+        "mandate_id": grant.id,
+        "decision": decision,
+        "total_cents": proposal.cart["total_cents"],
+        "currency": proposal.cart["currency"],
+        "rules_count": len(rules),
+        "cart_hash": proposal.cart_hash,
+    })
     if decision == "APPROVE":
         reserve(db, owner, grant, proposal)
     return proposal

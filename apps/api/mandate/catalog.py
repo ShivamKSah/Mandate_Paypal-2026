@@ -1,3 +1,6 @@
+from .channel3 import lookup_channel3_item
+
+
 def product(id, name, price, category="furniture", attributes=None, recurring=False, merchant="demo-merchant"):
     return {"id": id, "name": name, "merchant_id": merchant, "category": category,
             "unit_price_cents": price, "currency": "USD", "attributes": attributes or {},
@@ -24,6 +27,8 @@ def quote(items, currency):
         quantities[item.product_id] = quantities.get(item.product_id, 0) + item.quantity
     for product_id, quantity in sorted(quantities.items()):
         record = CATALOG.get(product_id)
+        if record is None and product_id.startswith("c3-"):
+            record = lookup_channel3_item(product_id)
         if record is None:
             missing.append(product_id)
             continue
