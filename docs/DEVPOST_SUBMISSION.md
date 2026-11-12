@@ -40,6 +40,8 @@ Mandate separates **shopping intent** from **payment authority**. An AI agent ca
   - Master-detail interaction: clicking any row in the AG Grid ledger seamlessly opens the audit drawer to display the payload and cryptographic SHA-256 P01–P11 invariant check results.
 - **Render (Official Hackathon Sponsor)**:
   - Complete `render.yaml` infrastructure-as-code Blueprint featuring Docker containerization, health check probes (`/api/health`), automated pre-deploy PostgreSQL migrations, and isolated evaluation sessions (`PUBLIC_DEMO=true`).
+- **Postman (Official Hackathon Sponsor)**:
+  - Complete OpenAPI-derived Postman collection ([`docs/mandate.postman_collection.json`](mandate.postman_collection.json)) covering all 36 REST endpoints across session management, autonomous agent runs, policy evaluations, PayPal orders, vault grants, capture webhooks, and cryptographic audit ledger verification.
 
 ## Challenges
 - **Eliminating silent state drift**: Mapping ambiguous PayPal timeouts/5xx to `UNKNOWN` with held reservations and durable outbox `PayPal-Request-Id` retries required careful row locking so retries never double-charge or leak budget.
