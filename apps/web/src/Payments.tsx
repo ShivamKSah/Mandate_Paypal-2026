@@ -137,7 +137,9 @@ export function Payments({
                       className="button-dark"
                       disabled={working || !configured}
                       title={
-                        !configured ? "PayPal is not configured" : undefined
+                        !configured
+                          ? "PayPal Sandbox is not configured in this environment."
+                          : undefined
                       }
                       onClick={() =>
                         void action(
@@ -154,7 +156,9 @@ export function Payments({
                       className="button-quiet"
                       disabled={working || !configured}
                       title={
-                        !configured ? "PayPal is not configured" : undefined
+                        !configured
+                          ? "PayPal Sandbox is not configured in this environment."
+                          : undefined
                       }
                       onClick={() =>
                         void action(
@@ -172,6 +176,11 @@ export function Payments({
                     <button
                       className="button-quiet"
                       disabled={working || !configured}
+                      title={
+                        !configured
+                          ? "PayPal Sandbox is not configured in this environment."
+                          : undefined
+                      }
                       onClick={() =>
                         void action(
                           () => api.capture(pay.id),
@@ -182,6 +191,14 @@ export function Payments({
                       Capture order after buyer approval
                     </button>
                   )}
+                  {!configured &&
+                    (available.vaultCharge ||
+                      available.checkout ||
+                      available.capture) && (
+                      <p className="inline-alert">
+                        PayPal Sandbox is not configured in this environment — live payment actions are disabled.
+                      </p>
+                    )}
                 </div>
               </div>
             );

@@ -21,6 +21,22 @@ Mandate is a bounded-authority AI shopping and payment-control system built with
 - **Demo catalog**: Local server-side catalog in [catalog.py](apps/api/mandate/catalog.py) with demo defaults: **$500.00 budget**, **$400.00 per-purchase cap**, merchant **`demo-merchant`**, and categories **`office_furniture` (`furniture` in catalog) and `electronics`**.
 - **Mocked in automated tests**: `apps/api/tests/*` replaces PayPal (`httpx.MockTransport` / fixture client) and GroqCloud (`httpx.MockTransport` / empty keys) and blocks all non-loopback network sockets via `pytest-socket --allow-hosts=127.0.0.1,::1`. Live PayPal Sandbox and GroqCloud calls only happen when running the server or `scripts/live_vault_check.py` / `scripts/check_llm.py` with real sandbox credentials in `.env`.
 
+## Try It as a Judge
+
+- **Hosted public demo URL**: `https://<TODO-RENDER-HOST>.onrender.com` (set `PUBLIC_DEMO=true` so every browser visitor automatically gets an isolated session with pre-seeded demo data or can reset via **Reset demo session**).
+- **PayPal Sandbox Buyer credentials (for PayPal approval steps only)**:
+  - Buyer email: `<TODO_SANDBOX_BUYER_EMAIL>`
+  - Buyer password: `<TODO_SANDBOX_BUYER_PASSWORD>`
+- **Screens that need NO PayPal login** (work immediately in any browser, even when PayPal is unconfigured):
+  - **Overview**: inspect budget vs reserved/captured balances, create a spending grant, or revoke a grant.
+  - **Shopping / Proposals**: run the shopping agent (or deterministic fallback) against the demo catalog and inspect `P01`–`P11` verdicts and `cart_hash` bindings.
+  - **Break the Mandate (Attacks)**: trigger any of the 15 adversarial carts individually or run all 15 to verify zero breaches and zero payment rows created, plus view the synthetic evaluation summary.
+  - **Audit Ledger**: inspect the hash-chained event log and open the `P01`–`P11` per-rule evaluation drawer on any decision row.
+  - **Recovery**: open a case with **Suggest cause from description** to get a deterministic/advisory cause classification (`Accept offer` only calls PayPal when a real captured payment with a refundable balance exists and PayPal is configured).
+- **Screens that DO need the PayPal Sandbox Buyer login** (if PayPal is not configured, buttons disable with an explicit notice instead of failing):
+  - **Vault Grant Setup (Overview -> Enable Autonomous (vaulted) / Complete vault grant)**: opens a `$1.00` PayPal Sandbox approval flow, stores the vaulted token Fernet-encrypted, and immediately auto-refunds the `$1.00`. Once `GRANTED`, **Payments -> Charge vaulted PayPal** executes autonomously without further buyer login.
+  - **Buyer-Present Checkout (Payments -> Start checkout / Fallback: buyer checkout -> Capture order after buyer approval)**: redirects to PayPal Sandbox for manual buyer approval on that single purchase.
+
 ## Run Locally
 
 1. Install Python `3.11+`, Node.js `22.12+`, and PostgreSQL 17 (native cluster on port `55432` or `docker compose up -d db`).

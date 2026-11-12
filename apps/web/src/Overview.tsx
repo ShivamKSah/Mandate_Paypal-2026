@@ -269,7 +269,9 @@ export function Overview({
                     className="button-quiet"
                     disabled={working || !paypalConfigured}
                     title={
-                      !paypalConfigured ? "PayPal is not configured" : undefined
+                      !paypalConfigured
+                        ? "PayPal Sandbox is not configured in this environment."
+                        : undefined
                     }
                     onClick={() =>
                       void action(async () => {
@@ -289,6 +291,11 @@ export function Overview({
                     <button
                       className="button-dark"
                       disabled={working || !paypalConfigured}
+                      title={
+                        !paypalConfigured
+                          ? "PayPal Sandbox is not configured in this environment."
+                          : undefined
+                      }
                       onClick={() =>
                         void action(async () => {
                           await api.completeVaultGrant(grant.id);
@@ -298,6 +305,11 @@ export function Overview({
                     >
                       Complete vault grant
                     </button>
+                  )}
+                  {!paypalConfigured && (
+                    <p className="inline-alert">
+                      PayPal Sandbox is not configured in this environment. Vault grant setup requires PayPal Sandbox credentials.
+                    </p>
                   )}
                 </div>
               )}
