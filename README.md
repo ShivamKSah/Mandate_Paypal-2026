@@ -45,6 +45,44 @@ Mandate is a bounded-authority AI shopping and payment-control system built with
   - **Vault Grant Setup (Overview -> Enable Autonomous (vaulted) / Complete vault grant)**: opens a `$1.00` PayPal Sandbox approval flow, stores the vaulted token Fernet-encrypted, and immediately auto-refunds the `$1.00`. Once `GRANTED`, **Payments -> Charge vaulted PayPal** executes autonomously without further buyer login.
   - **Buyer-Present Checkout (Payments -> Start checkout / Fallback: buyer checkout -> Capture order after buyer approval)**: redirects to PayPal Sandbox for manual buyer approval on that single purchase.
 
+## Why This Matters
+
+Giving an AI agent unrestricted checkout access turns prompt injection and model hallucinations directly into financial loss. Security research from **Guardio Labs** (Scamlexity tests of agentic browsers), **Brave**, and **Palo Alto Unit 42** has demonstrated indirect prompt injection attacks against browser and shopping agents, and **OpenAI** has stated publicly that prompt injection remains an unsolved security problem. Rather than trying to make the LLM un-trickable, Mandate enforces a deterministic spending boundary between the agent and PayPal.
+
+## How Mandate Differs
+
+| Control / Initiative | What It Does | Gap Mandate Fills |
+| --- | --- | --- |
+| **OAuth scopes** | Restricts coarse API capabilities (read/write orders) | Cannot enforce integer-cent budgets, per-cart caps, item attributes, or `cart_hash` binding |
+| **Card limits** | Caps total spend or velocity at the card/issuer level | Lacks per-merchant/category allowlists, ambiguity `ESCALATE` gates, and bounded refund recovery |
+| **Google AP2 mandates** | Defines cryptographically signed agent payment mandate specifications | *Note: Mandate's name is AP2-inspired, not an AP2 implementation.* Mandate provides a runnable FastAPI/PostgreSQL + PayPal Sandbox reference enforcement loop today |
+| **Visa and Mastercard agent controls** | Network-level tokenization and agentic commerce rails | Focuses on card-network authorization rather than local pre-dispatch `P01`–`P11` policy + post-capture bounded recovery |
+| **PayPal Agent Ready** | Enables agent-initiated PayPal checkout/payment experiences | Mandate adds the local deterministic policy engine (`P01`–`P11`), outbox + `UNKNOWN` reconciliation holds, and hash-chained audit ledger in front of PayPal |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  User["Human Operator / Judge"] -->|Sets grant & approves escalations| UI["React 19 Dashboard"]
+  Agent["AI Shopping Agent (Groq)"] -->|Proposes product IDs| TrustBoundary["Trust Boundary (FastAPI)"]
+  UI --> TrustBoundary
+  TrustBoundary -->|Canonical catalog quote & cart_hash| Policy["Policy Engine (P01-P11)"]
+  Policy -->|DENY / ESCALATE| Audit["SHA-256 Hash-Chained Audit Ledger"]
+  Policy -->|APPROVE: atomic row-locked reservation| Outbox["Durable Operation Outbox (PostgreSQL 17)"]
+  Outbox -->|Stable PayPal-Request-Id + Fernet vault_id| PayPal["PayPal Sandbox (Orders v2 / Vault / Refunds)"]
+  PayPal -->|Timeout / 5xx -> UNKNOWN hold| Recon["Background Reconciliation Worker (GET Order)"]
+  Recon --> Audit
+  PayPal -->|Signed Webhooks + Authoritative GET| Audit
+```
+
+## Tools Used
+
+- **Backend & Persistence**: Python 3.11+, FastAPI, SQLAlchemy, Alembic (`0001`–`0004`), PostgreSQL 17, `cryptography` (Fernet)
+- **Payments**: PayPal Sandbox REST API v2 (Orders, Vault `vault_id`, Refunds, Webhook Signature Verification)
+- **AI (Advisory / Proposal Only)**: GroqCloud (`openai/gpt-oss-20b` with labeled deterministic rules fallback)
+- **Frontend**: React 19, TypeScript 7, Vite 8, Zod, Lucide Icons
+- **Testing & Verification**: `pytest`, `pytest-socket` (loopback-only offline guard), `httpx.MockTransport`, Hypothesis (`@seed(42)`), Node test runner
+
 ## Run Locally
 
 1. Install Python `3.11+`, Node.js `22.12+`, and PostgreSQL 17 (native cluster on port `55432` or `docker compose up -d db`).
